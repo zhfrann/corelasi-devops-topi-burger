@@ -15,7 +15,10 @@ import {
 import { Eye, Clock, AlertCircle, CheckCircle2 } from "lucide-react";
 
 import { getSiswaKelasId } from "@/utils/student";
-import { searchAssignments } from "@/utils/assignmentFilters";
+import {
+  filterAndSearchAssignments,
+  getSubmissionStatus,
+} from "@/utils/assignmentFilters";
 
 export const AssignmentsListPage: React.FC = () => {
   const { user } = useAuth();
@@ -24,6 +27,7 @@ export const AssignmentsListPage: React.FC = () => {
   const [tugasList, setTugasList] = useState<Tugas[]>([]);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
 
   useEffect(() => {
     const loadData = async () => {
@@ -56,12 +60,6 @@ export const AssignmentsListPage: React.FC = () => {
     loadData();
   }, [user]);
 
-  const getSubmissionStatus = (tugasId: string) => {
-    const sub = submissions.find((s) => s.tugasId === tugasId);
-    if (!sub) return "Belum Mengumpulkan";
-    return sub.status;
-  };
-
   const getSubmissionGrade = (tugasId: string): string => {
     const sub = submissions.find((s) => s.tugasId === tugasId);
     if (!sub?.grade) return "-";
@@ -70,18 +68,23 @@ export const AssignmentsListPage: React.FC = () => {
 
   // Summary calculations
   const belumDikumpulkan = tugasList.filter(
-    (t) => getSubmissionStatus(t.id) === "Belum Mengumpulkan",
+    (t) => getSubmissionStatus(t.id, submissions) === "Belum Mengumpulkan",
   ).length;
   const terkumpul = tugasList.filter(
-    (t) => getSubmissionStatus(t.id) === "Terkumpul",
+    (t) => getSubmissionStatus(t.id, submissions) === "Terkumpul",
   ).length;
   const late = tugasList.filter(
-    (t) => getSubmissionStatus(t.id) === "Late",
+    (t) => getSubmissionStatus(t.id, submissions) === "Late",
   ).length;
 
   const filteredTugas = useMemo(() => {
-    return searchAssignments(tugasList, search);
-  }, [tugasList, search]);
+    return filterAndSearchAssignments(
+      tugasList,
+      submissions,
+      search,
+      statusFilter,
+    );
+  }, [tugasList, submissions, search, statusFilter]);
 
   const columns = [
     {
@@ -127,7 +130,7 @@ export const AssignmentsListPage: React.FC = () => {
     {
       header: "Status Pengumpulan",
       cell: (t: Tugas) => {
-        const status = getSubmissionStatus(t.id);
+        const status = getSubmissionStatus(t.id, submissions);
         const state =
           status === "Terkumpul"
             ? "safe"
@@ -209,6 +212,15 @@ export const AssignmentsListPage: React.FC = () => {
         searchPlaceholder="Cari judul tugas atau mata pelajaran..."
         searchValue={search}
         onSearchChange={setSearch}
+        filterValue={statusFilter}
+        onFilterChange={setStatusFilter}
+        filterLabel="Status Tugas"
+        filterPlaceholder="Semua Status"
+        filterOptions={[
+          { value: "Belum Mengumpulkan", label: "Belum Mengumpulkan" },
+          { value: "Terkumpul", label: "Terkumpul" },
+          { value: "Late", label: "Terlambat" },
+        ]}
         searchLabel="Pencarian Riwayat Tugas"
       />
 
@@ -225,8 +237,8 @@ export const AssignmentsListPage: React.FC = () => {
           keyExtractor={(t) => t.id}
           emptyStateTitle="Tidak ada tugas ditemukan"
           emptyStateDescription={
-            search
-              ? "Tidak ada tugas yang cocok dengan kata kunci pencarian Anda."
+            search || statusFilter
+              ? "Tidak ada tugas yang cocok dengan filter atau kata kunci pencarian Anda."
               : "Belum ada tugas yang dipublikasikan pada semester ini."
           }
         />
