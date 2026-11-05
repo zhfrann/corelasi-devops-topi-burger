@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { learningService } from "@/services/learningService";
@@ -10,10 +10,12 @@ import {
   SummaryMetricCard,
   LoadingState,
   ErrorState,
+  FilterBar,
 } from "@/components/shared";
 import { Eye, Clock, AlertCircle, CheckCircle2 } from "lucide-react";
 
 import { getSiswaKelasId } from "@/utils/student";
+import { searchAssignments } from "@/utils/assignmentFilters";
 
 export const AssignmentsListPage: React.FC = () => {
   const { user } = useAuth();
@@ -21,6 +23,7 @@ export const AssignmentsListPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [tugasList, setTugasList] = useState<Tugas[]>([]);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     const loadData = async () => {
@@ -75,6 +78,10 @@ export const AssignmentsListPage: React.FC = () => {
   const late = tugasList.filter(
     (t) => getSubmissionStatus(t.id) === "Late",
   ).length;
+
+  const filteredTugas = useMemo(() => {
+    return searchAssignments(tugasList, search);
+  }, [tugasList, search]);
 
   const columns = [
     {
@@ -197,6 +204,14 @@ export const AssignmentsListPage: React.FC = () => {
         />
       </div>
 
+      {/* Filter and Search Bar */}
+      <FilterBar
+        searchPlaceholder="Cari judul tugas atau mata pelajaran..."
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchLabel="Pencarian Riwayat Tugas"
+      />
+
       {/* Table */}
       {loading ? (
         <LoadingState message="Memuat data tugas..." />
@@ -206,10 +221,14 @@ export const AssignmentsListPage: React.FC = () => {
         <DataTable
           title="Seluruh Tugas"
           columns={columns}
-          data={tugasList}
+          data={filteredTugas}
           keyExtractor={(t) => t.id}
-          emptyStateTitle="Belum ada tugas"
-          emptyStateDescription="Belum ada tugas yang dipublikasikan pada semester ini."
+          emptyStateTitle="Tidak ada tugas ditemukan"
+          emptyStateDescription={
+            search
+              ? "Tidak ada tugas yang cocok dengan kata kunci pencarian Anda."
+              : "Belum ada tugas yang dipublikasikan pada semester ini."
+          }
         />
       )}
     </div>
