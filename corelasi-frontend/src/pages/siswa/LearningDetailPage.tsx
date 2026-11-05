@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { learningService } from "@/services/learningService";
@@ -12,6 +12,7 @@ import {
   StatusBadge,
   LoadingState,
   ErrorState,
+  FilterBar,
 } from "@/components/shared";
 import {
   ArrowLeft,
@@ -21,6 +22,7 @@ import {
   Download,
   ExternalLink,
 } from "lucide-react";
+import { searchMaterials } from "@/utils/learningFilters";
 
 export const LearningDetailPage: React.FC = () => {
   const { id } = useParams(); // mapelId
@@ -34,6 +36,7 @@ export const LearningDetailPage: React.FC = () => {
   const [materials, setMaterials] = useState<Materi[]>([]);
   const [assignments, setAssignments] = useState<Tugas[]>([]);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [materiSearch, setMateriSearch] = useState("");
 
   useEffect(() => {
     const loadContent = async () => {
@@ -55,7 +58,7 @@ export const LearningDetailPage: React.FC = () => {
         setSubjectName(currentMapel ? currentMapel.name : "Pembelajaran");
 
         // Filter materials and assignments for this student's class and selected mapel
-        const filteredMaterials = allMat.filter(
+        const classMaterials = allMat.filter(
           (m) =>
             String(m.kelasId) === String(classId) &&
             String(m.mapelId) === String(id) &&
@@ -69,7 +72,7 @@ export const LearningDetailPage: React.FC = () => {
         );
         const mySubmissions = allSub.filter((s) => s.siswaId === user.id);
 
-        setMaterials(filteredMaterials);
+        setMaterials(classMaterials);
         setAssignments(filteredAssignments);
         setSubmissions(mySubmissions);
       } catch (err) {
@@ -102,6 +105,10 @@ export const LearningDetailPage: React.FC = () => {
     const sub = submissions.find((s) => s.tugasId === tugasId);
     return sub ? sub.status : "Belum Mengumpulkan";
   };
+
+  const filteredMaterials = useMemo(() => {
+    return searchMaterials(materials, materiSearch);
+  }, [materials, materiSearch]);
 
   if (loading) {
     return <LoadingState message="Memuat data pembelajaran..." />;
@@ -146,6 +153,16 @@ export const LearningDetailPage: React.FC = () => {
       <div className="mt-6">
         {activeTab === "materi" && (
           <div className="space-y-4 max-w-3xl">
+            {/* Filter and Search Bar for Materials */}
+            {materials.length > 0 && (
+              <FilterBar
+                searchPlaceholder="Cari judul atau ringkasan modul materi..."
+                searchValue={materiSearch}
+                onSearchChange={setMateriSearch}
+                searchLabel="Pencarian Materi"
+              />
+            )}
+
             {materials.length === 0 ? (
               <div className="border border-bg-border bg-bg-surface rounded-[6px] p-8 text-center">
                 <p className="text-[14px] font-bold text-bg-ink">
@@ -156,8 +173,17 @@ export const LearningDetailPage: React.FC = () => {
                   pelajaran ini.
                 </p>
               </div>
+            ) : filteredMaterials.length === 0 ? (
+              <div className="border border-bg-border bg-bg-surface rounded-[6px] p-8 text-center">
+                <p className="text-[14px] font-bold text-bg-ink">
+                  Tidak ada materi ditemukan
+                </p>
+                <p className="mt-1 text-[13px] text-bg-ink-secondary">
+                  Tidak ada materi ajar yang cocok dengan kata kunci &quot;{materiSearch}&quot;.
+                </p>
+              </div>
             ) : (
-              materials.map((mat) => (
+              filteredMaterials.map((mat) => (
                 <Card
                   key={mat.id}
                   variant="surface"

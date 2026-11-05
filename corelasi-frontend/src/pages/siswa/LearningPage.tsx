@@ -1,17 +1,24 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { scheduleService } from "@/services/scheduleService";
 import { getSiswaKelasId } from "@/utils/student";
 import type { JadwalPembelajaran } from "@/types/schedule";
-import { Card, LoadingState, ErrorState } from "@/components/shared";
+import {
+  Card,
+  LoadingState,
+  ErrorState,
+  FilterBar,
+} from "@/components/shared";
 import { BookOpen, GraduationCap, ChevronRight } from "lucide-react";
+import { searchCourses } from "@/utils/learningFilters";
 
 export const LearningPage: React.FC = () => {
   const { user } = useAuth();
   const [courses, setCourses] = useState<JadwalPembelajaran[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     const fetchCourses = async () => {
@@ -47,6 +54,10 @@ export const LearningPage: React.FC = () => {
     fetchCourses();
   }, [user]);
 
+  const filteredCourses = useMemo(() => {
+    return searchCourses(courses, search);
+  }, [courses, search]);
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -60,6 +71,14 @@ export const LearningPage: React.FC = () => {
         </p>
       </div>
 
+      {/* Filter and Search Bar */}
+      <FilterBar
+        searchPlaceholder="Cari mata pelajaran atau guru..."
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchLabel="Pencarian Modul & Kelas"
+      />
+
       {loading ? (
         <LoadingState message="Memuat kelas pembelajaran..." />
       ) : error ? (
@@ -71,9 +90,18 @@ export const LearningPage: React.FC = () => {
             Anda belum terdaftar pada mata pelajaran apapun semester ini.
           </p>
         </div>
+      ) : filteredCourses.length === 0 ? (
+        <div className="border border-bg-border bg-bg-surface rounded-[6px] p-8 text-center">
+          <p className="text-[14px] font-bold text-bg-ink">
+            Tidak ada modul/mata pelajaran ditemukan
+          </p>
+          <p className="mt-1 text-[13px] text-bg-ink-secondary">
+            Tidak ada mata pelajaran yang cocok dengan kata kunci &quot;{search}&quot;.
+          </p>
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {courses.map((course) => (
+          {filteredCourses.map((course) => (
             <Link
               key={course.id}
               to={`/siswa/learning/${course.mapelId}`}
