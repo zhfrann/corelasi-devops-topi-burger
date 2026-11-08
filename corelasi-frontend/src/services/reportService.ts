@@ -10,7 +10,7 @@ import { attendanceService } from "./attendanceService";
 import { userService } from "./userService";
 import { learningService } from "./learningService";
 import { journalService } from "./journalService";
-import { calculateAttendancePercentage, hasAttendanceData } from "@/utils/attendanceReport";
+import { calculateAttendancePercentage, hasAttendanceData, sortAttendanceReports } from "@/utils/attendanceReport";
 import type {
   AttendanceReportFilters,
   StudentAttendanceSummary,
@@ -32,6 +32,8 @@ export const reportService = {
         ...(kelasId ? { kelasId } : {}),
         ...(filters?.mapelId ? { mapelId: filters.mapelId } : {}),
         ...(filters?.attendanceStatus ? { attendanceStatus: filters.attendanceStatus } : {}),
+        ...(filters?.sortBy ? { sortBy: filters.sortBy } : {}),
+        ...(filters?.sortOrder ? { sortOrder: filters.sortOrder } : {}),
       };
       return apiGet<StudentAttendanceSummary[]>(
         "/reports/attendance/",
@@ -91,14 +93,14 @@ export const reportService = {
       })
       : reports;
 
+    let filteredReports = classReports;
     if (filters?.attendanceStatus === "below_90") {
-      return classReports.filter((report) => hasAttendanceData(report) && report.percentage < 90);
-    }
-    if (filters?.attendanceStatus === "at_least_90") {
-      return classReports.filter((report) => hasAttendanceData(report) && report.percentage >= 90);
+      filteredReports = classReports.filter((report) => hasAttendanceData(report) && report.percentage < 90);
+    } else if (filters?.attendanceStatus === "at_least_90") {
+      filteredReports = classReports.filter((report) => hasAttendanceData(report) && report.percentage >= 90);
     }
 
-    return classReports;
+    return sortAttendanceReports(filteredReports, filters?.sortBy, filters?.sortOrder);
   },
 
   async getGradeReports(kelasId?: string): Promise<StudentGradeSummary[]> {

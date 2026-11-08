@@ -45,14 +45,14 @@ describe("attendance percentage categories in the mock service", () => {
 
   it("includes 80% and real 0% in below_90 but excludes students without records", async () => {
     const rows = await rowsFor("below_90");
-    expect(rows.map((row) => row.siswaId)).toEqual(["low", "zero", "half-low"]);
+    expect(rows.map((row) => row.siswaId)).toEqual(["half-low", "low", "zero"]);
     expect(rows.find((row) => row.siswaId === "zero")).toMatchObject({ alpa: 5, percentage: 0 });
     expect(rows.find((row) => row.siswaId === "low")?.percentage).toBe(80);
   });
 
   it("includes exactly 90% and 100% and evaluates rounded percentages", async () => {
     const rows = await rowsFor("at_least_90");
-    expect(rows.map((row) => row.siswaId)).toEqual(["boundary", "full", "rounded", "half-boundary", "half-high"]);
+    expect(rows.map((row) => row.siswaId)).toEqual(["boundary", "full", "half-boundary", "half-high", "rounded"]);
     expect(rows.find((row) => row.siswaId === "boundary")?.percentage).toBe(90);
     expect(rows.find((row) => row.siswaId === "full")?.percentage).toBe(100);
     expect(rows.find((row) => row.siswaId === "rounded")).toMatchObject({ hadir: 112, alpa: 13, percentage: 90 });

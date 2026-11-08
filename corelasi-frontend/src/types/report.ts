@@ -1,8 +1,12 @@
 export type AttendanceStatus = "all" | "below_90" | "at_least_90";
+export type AttendanceSortBy = "name" | "percentage";
+export type AttendanceSortOrder = "asc" | "desc";
 
 export interface AttendanceReportFilters {
   mapelId?: string;
   attendanceStatus?: AttendanceStatus;
+  sortBy?: AttendanceSortBy;
+  sortOrder?: AttendanceSortOrder;
 }
 
 export interface StudentAttendanceSummary {
