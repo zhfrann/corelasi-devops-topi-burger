@@ -31,6 +31,9 @@ urlpatterns = [
     path('api/learning/', include('learning.urls')),
     path('api/journals/', include('journals.urls')),
     path('api/reports/', include('reports.urls')),
+    path('api/dashboard/stats/', dashboard_analytics_api, name='dashboard-stats'),
+    path('api/reports/excel/', export_excel_report, name='export-excel'),
+    path('api/reports/pdf/', export_pdf_report, name='export-pdf'),
 ]
 
 if settings.DEBUG:
