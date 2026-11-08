@@ -61,3 +61,14 @@ class SubmissionSerializer(serializers.ModelSerializer):
             "id", "tugasId", "siswaId", "siswaName", "submitDate", "fileUrl",
             "status", "grade", "feedback"
         )
+
+
+class StudentGradesQuerySerializer(serializers.Serializer):
+    """Query serializer for filtering student grades."""
+    search = serializers.CharField(
+        required=False, allow_blank=True, default="", max_length=100
+    )
+
+    def validate_search(self, value):
+        return (value or "").strip()
+

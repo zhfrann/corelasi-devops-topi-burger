@@ -1,22 +1,16 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { learningService } from "@/services/learningService";
 import type { StudentGradeSummary } from "@/types/report";
 import {
   DataTable,
+  FilterBar,
   SummaryMetricCard,
   LoadingState,
   ErrorState,
 } from "@/components/shared";
 import { Award, Clock, CheckSquare } from "lucide-react";
-
-interface GradeRow {
-  tugasId: string;
-  tugasTitle: string;
-  mapelName: string;
-  score?: number;
-  feedback?: string;
-}
+import { searchGrades, type GradeRow } from "@/utils/gradeFilters";
 
 import { getSiswaKelasId } from "@/utils/student";
 
@@ -26,6 +20,7 @@ export const GradesPage: React.FC = () => {
     useState<StudentGradeSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   const fetchGrades = useCallback(async () => {
     if (!user) return;
@@ -33,50 +28,62 @@ export const GradesPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [allTugas, allSubs] = await Promise.all([
-        learningService.getTugas(),
-        learningService.getSubmissions(),
-      ]);
-
-      const classId = getSiswaKelasId(user);
-      const published = allTugas.filter(
-        (t) =>
-          t.status === "Dipublikasikan" &&
-          String(t.kelasId) === String(classId),
-      );
-      const mySubs = allSubs.filter((s) => s.siswaId === user.id);
-
-      const grades: GradeRow[] = published.map((t) => {
-        const sub = mySubs.find((s) => s.tugasId === t.id);
-        return {
-          tugasId: String(t.id),
-          tugasTitle: t.title,
-          mapelName: t.mapelName,
-          score: sub?.grade,
-          feedback: sub?.feedback,
-        };
-      });
-
-      const gradedGrades = grades.filter((g) => g.score !== undefined);
-      const totalScore = gradedGrades.reduce(
-        (sum, g) => sum + (g.score || 0),
-        0,
-      );
-      const average =
-        gradedGrades.length > 0
-          ? Math.round(totalScore / gradedGrades.length)
-          : 0;
-
+      const res = await learningService.getMyGrades();
       setStudentReport({
         siswaId: user.id,
         siswaName: user.name || "",
         nis: user.nipOrNis || "",
         kelasName: user.kelasName || "",
-        grades,
-        average,
+        grades: res.grades,
+        average: res.summary.average,
       });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal memuat data nilai.");
+    } catch {
+      try {
+        const [allTugas, allSubs] = await Promise.all([
+          learningService.getTugas(),
+          learningService.getSubmissions(),
+        ]);
+
+        const classId = getSiswaKelasId(user);
+        const published = allTugas.filter(
+          (t) =>
+            t.status === "Dipublikasikan" &&
+            String(t.kelasId) === String(classId),
+        );
+        const mySubs = allSubs.filter((s) => s.siswaId === user.id);
+
+        const grades: GradeRow[] = published.map((t) => {
+          const sub = mySubs.find((s) => s.tugasId === t.id);
+          return {
+            tugasId: String(t.id),
+            tugasTitle: t.title,
+            mapelName: t.mapelName,
+            score: sub?.grade,
+            feedback: sub?.feedback,
+          };
+        });
+
+        const gradedGrades = grades.filter((g) => g.score !== undefined);
+        const totalScore = gradedGrades.reduce(
+          (sum, g) => sum + (g.score || 0),
+          0,
+        );
+        const average =
+          gradedGrades.length > 0
+            ? Math.round(totalScore / gradedGrades.length)
+            : 0;
+
+        setStudentReport({
+          siswaId: user.id,
+          siswaName: user.name || "",
+          nis: user.nipOrNis || "",
+          kelasName: user.kelasName || "",
+          grades,
+          average,
+        });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Gagal memuat data nilai.");
+      }
     } finally {
       setLoading(false);
     }
@@ -130,6 +137,16 @@ export const GradesPage: React.FC = () => {
     },
   ];
 
+  const grades = studentReport ? studentReport.grades : [];
+  const average = studentReport?.average ?? 0;
+  const totalTugas = grades.length;
+  const gradedTugas = grades.filter((g) => g.score !== undefined).length;
+  const pendingTugas = totalTugas - gradedTugas;
+
+  const filteredGrades = useMemo(() => {
+    return searchGrades(grades, search);
+  }, [grades, search]);
+
   if (loading) {
     return <LoadingState message="Memuat data nilai Anda..." />;
   }
@@ -137,12 +154,6 @@ export const GradesPage: React.FC = () => {
   if (error) {
     return <ErrorState message={error} onRetry={fetchGrades} />;
   }
-
-  const average = studentReport?.average ?? 0;
-  const grades = studentReport ? studentReport.grades : [];
-  const totalTugas = grades.length;
-  const gradedTugas = grades.filter((g) => g.score !== undefined).length;
-  const pendingTugas = totalTugas - gradedTugas;
 
   return (
     <div className="space-y-6">
@@ -185,14 +196,26 @@ export const GradesPage: React.FC = () => {
         />
       </div>
 
+      {/* Search & Filter Bar */}
+      <FilterBar
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Cari tugas atau mata pelajaran..."
+        searchLabel="Pencarian Evaluasi"
+      />
+
       {/* Main Table */}
       <DataTable
         title="Daftar Rincian Nilai Tugas Akademik Anda"
         columns={columns}
-        data={grades}
+        data={filteredGrades}
         keyExtractor={(g) => g.tugasId}
         emptyStateTitle="Tidak ada nilai"
-        emptyStateDescription="Belum ada data nilai tugas mandiri yang terbit untuk kelas Anda."
+        emptyStateDescription={
+          search.trim()
+            ? "Tidak ada nilai tugas atau mata pelajaran yang cocok dengan kata kunci pencarian Anda."
+            : "Belum ada data nilai tugas mandiri yang terbit untuk kelas Anda."
+        }
       />
     </div>
   );

@@ -94,6 +94,7 @@ class LearningAPITests(APITestCase):
         self.tugas_url = "/api/learning/tugas/"
         self.submissions_url = "/api/learning/submissions/"
         self.upload_url = "/api/learning/upload/"
+        self.my_grades_url = "/api/learning/my-grades/"
 
     def test_teacher_can_crud_materi(self):
         self.client.force_authenticate(user=self.teacher)
@@ -510,3 +511,116 @@ class LearningAPITests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_student_can_get_my_grades_with_metrics(self):
+        tugas1 = Tugas.objects.create(
+            title="Tugas Termodinamika",
+            description="Soal bab 1",
+            due_date=datetime.date.today() + datetime.timedelta(days=1),
+            kelas=self.kelas_a,
+            mapel=self.mapel,
+            guru=self.teacher,
+            status="Dipublikasikan",
+        )
+        tugas2 = Tugas.objects.create(
+            title="Tugas Stoikiometri",
+            description="Soal stoikiometri",
+            due_date=datetime.date.today() + datetime.timedelta(days=2),
+            kelas=self.kelas_a,
+            mapel=self.mapel_other,
+            guru=self.teacher,
+            status="Dipublikasikan",
+        )
+        Submission.objects.create(
+            tugas=tugas1,
+            siswa=self.siswa,
+            status="Terkumpul",
+            grade=90,
+            feedback="Bagus sekali",
+        )
+
+        self.client.force_authenticate(user=self.siswa)
+        response = self.client.get(self.my_grades_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["success"])
+        data = response.data["data"]
+        self.assertEqual(data["summary"]["totalTugas"], 2)
+        self.assertEqual(data["summary"]["gradedTugas"], 1)
+        self.assertEqual(data["summary"]["pendingTugas"], 1)
+        self.assertEqual(data["summary"]["average"], 90)
+        self.assertEqual(len(data["grades"]), 2)
+
+    def test_student_can_search_grades_by_tugas_title(self):
+        Tugas.objects.create(
+            title="Ujian Aljabar Matriks",
+            description="Soal aljabar",
+            due_date=datetime.date.today() + datetime.timedelta(days=1),
+            kelas=self.kelas_a,
+            mapel=self.mapel,
+            guru=self.teacher,
+            status="Dipublikasikan",
+        )
+        Tugas.objects.create(
+            title="Praktikum Optika Geometri",
+            description="Laporan optika",
+            due_date=datetime.date.today() + datetime.timedelta(days=2),
+            kelas=self.kelas_a,
+            mapel=self.mapel,
+            guru=self.teacher,
+            status="Dipublikasikan",
+        )
+
+        self.client.force_authenticate(user=self.siswa)
+        response = self.client.get(self.my_grades_url, {"search": "aljabar"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        grades = response.data["data"]["grades"]
+        self.assertEqual(len(grades), 1)
+        self.assertEqual(grades[0]["tugasTitle"], "Ujian Aljabar Matriks")
+
+    def test_student_can_search_grades_by_mapel_name(self):
+        Tugas.objects.create(
+            title="Tugas 1",
+            description="Deskripsi",
+            due_date=datetime.date.today() + datetime.timedelta(days=1),
+            kelas=self.kelas_a,
+            mapel=self.mapel,  # Fisika
+            guru=self.teacher,
+            status="Dipublikasikan",
+        )
+        Tugas.objects.create(
+            title="Tugas 2",
+            description="Deskripsi",
+            due_date=datetime.date.today() + datetime.timedelta(days=2),
+            kelas=self.kelas_a,
+            mapel=self.mapel_other,  # Kimia
+            guru=self.teacher,
+            status="Dipublikasikan",
+        )
+
+        self.client.force_authenticate(user=self.siswa)
+        response = self.client.get(self.my_grades_url, {"search": "Kimia"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        grades = response.data["data"]["grades"]
+        self.assertEqual(len(grades), 1)
+        self.assertEqual(grades[0]["mapelName"], "Kimia")
+
+    def test_student_search_grades_returns_empty_when_no_match(self):
+        Tugas.objects.create(
+            title="Tugas Fisika Dasar",
+            description="Deskripsi",
+            due_date=datetime.date.today() + datetime.timedelta(days=1),
+            kelas=self.kelas_a,
+            mapel=self.mapel,
+            guru=self.teacher,
+            status="Dipublikasikan",
+        )
+
+        self.client.force_authenticate(user=self.siswa)
+        response = self.client.get(self.my_grades_url, {"search": "Biologi Molekuler"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["data"]["grades"]), 0)
+
+    def test_unauthenticated_cannot_access_my_grades(self):
+        response = self.client.get(self.my_grades_url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
