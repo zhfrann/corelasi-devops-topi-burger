@@ -4,6 +4,12 @@ from academic.models import MataPelajaran
 
 
 class AttendanceReportQuerySerializer(serializers.Serializer):
+    sortBy = serializers.ChoiceField(
+        choices=("name", "percentage"), required=False, default="name", allow_blank=True,
+    )
+    sortOrder = serializers.ChoiceField(
+        choices=("asc", "desc"), required=False, default="asc", allow_blank=True,
+    )
     attendanceStatus = serializers.ChoiceField(
         choices=("all", "below_90", "at_least_90"),
         required=False, default="all", allow_blank=True,
@@ -15,6 +21,12 @@ class AttendanceReportQuerySerializer(serializers.Serializer):
 
     def validate_attendanceStatus(self, value):
         return value or "all"
+
+    def validate_sortBy(self, value):
+        return value or "name"
+
+    def validate_sortOrder(self, value):
+        return value or "asc"
 
     def validate_mapelId(self, value):
         if value == "":
