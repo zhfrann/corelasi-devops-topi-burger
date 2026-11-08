@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { CheckSquare, Square } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, CheckSquare, Square } from "lucide-react";
 import { Button } from "./Button";
 
 export interface ColumnDef<T> {
@@ -8,6 +8,7 @@ export interface ColumnDef<T> {
   cell?: (item: T, index: number) => React.ReactNode;
   className?: string;
   width?: string;
+  sortKey?: string;
 }
 
 export interface DataTableProps<T> {
@@ -25,6 +26,9 @@ export interface DataTableProps<T> {
   rowClassName?: (item: T, index: number) => string;
   paginate?: boolean;
   pageSize?: number;
+  sortBy?: string;
+  sortOrder?: "asc" | "desc";
+  onSortChange?: (key: string) => void;
 }
 
 export function DataTable<T>({
@@ -42,6 +46,9 @@ export function DataTable<T>({
   rowClassName,
   paginate = false,
   pageSize = 10,
+  sortBy,
+  sortOrder = "asc",
+  onSortChange,
 }: DataTableProps<T>) {
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -121,10 +128,28 @@ export function DataTable<T>({
               {columns.map((col, idx) => (
                 <th
                   key={idx}
+                  aria-sort={col.sortKey && onSortChange
+                    ? sortBy === col.sortKey
+                      ? sortOrder === "asc" ? "ascending" : "descending"
+                      : "none"
+                    : undefined}
                   style={{ width: col.width }}
                   className={`py-3.5 pr-4 text-[11px] ${col.className || ""} ${!selectable && idx === 0 ? "pl-5" : ""}`}
                 >
-                  {col.header}
+                  {col.sortKey && onSortChange ? (
+                    <button
+                      type="button"
+                      onClick={() => col.sortKey && onSortChange(col.sortKey)}
+                      className="inline-flex items-center gap-1.5 rounded text-left cursor-pointer hover:text-bg-ink focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+                    >
+                      {col.header}
+                      {sortBy === col.sortKey ? (
+                        sortOrder === "asc"
+                          ? <ArrowUp className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                          : <ArrowDown className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      ) : <ArrowUpDown className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
+                    </button>
+                  ) : col.header}
                 </th>
               ))}
             </tr>

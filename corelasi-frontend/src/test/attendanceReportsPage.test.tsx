@@ -14,6 +14,7 @@ const ani: StudentAttendanceSummary = {
   hadir: 1, sakit: 0, izin: 0, alpa: 0, percentage: 100,
 };
 const budi = { ...ani, siswaId: "2", siswaName: "Budi", nis: "456" };
+const defaultSorting = { sortBy: "name", sortOrder: "asc" };
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -22,7 +23,7 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-describe("attendance report page subject filter", () => {
+describe("attendance report page filters and sorting", () => {
   let root: Root;
   let container: HTMLDivElement;
 
@@ -58,6 +59,10 @@ describe("attendance report page subject filter", () => {
     await act(async () => { root.render(<AttendanceReportsPage />); });
   }
 
+  async function click(label: string) {
+    await act(async () => { button(label).click(); });
+  }
+
   beforeEach(() => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
     container = document.createElement("div");
@@ -87,11 +92,11 @@ describe("attendance report page subject filter", () => {
     expect(academicService.getMapel).toHaveBeenCalled();
     expect(element("#attendance-report-mapel")).toHaveTextContent("Matematika");
     await select("#attendance-report-mapel", "2");
-    expect(reportService.getAttendanceReports).toHaveBeenLastCalledWith(undefined, { mapelId: "2", attendanceStatus: "all" });
+    expect(reportService.getAttendanceReports).toHaveBeenLastCalledWith(undefined, { mapelId: "2", attendanceStatus: "all", ...defaultSorting });
     await select('select[aria-label="Semua Kelas"]', "1");
-    expect(reportService.getAttendanceReports).toHaveBeenLastCalledWith("1", { mapelId: "2", attendanceStatus: "all" });
+    expect(reportService.getAttendanceReports).toHaveBeenLastCalledWith("1", { mapelId: "2", attendanceStatus: "all", ...defaultSorting });
     await select("#attendance-report-mapel", "");
-    expect(reportService.getAttendanceReports).toHaveBeenLastCalledWith("1", { mapelId: undefined, attendanceStatus: "all" });
+    expect(reportService.getAttendanceReports).toHaveBeenLastCalledWith("1", { mapelId: undefined, attendanceStatus: "all", ...defaultSorting });
   });
 
   it("keeps master options and shows an empty state when the report is empty", async () => {
@@ -132,7 +137,7 @@ describe("attendance report page subject filter", () => {
     expect(container.querySelector("table")).toBeNull();
     expect(button("Ekspor Excel")).toBeDisabled();
     await act(async () => { button("Coba Lagi").click(); });
-    expect(reportService.getAttendanceReports).toHaveBeenLastCalledWith(undefined, { mapelId: "2", attendanceStatus: "all" });
+    expect(reportService.getAttendanceReports).toHaveBeenLastCalledWith(undefined, { mapelId: "2", attendanceStatus: "all", ...defaultSorting });
     expect(element("tbody")).toHaveTextContent("Ani");
   });
 
@@ -174,14 +179,14 @@ describe("attendance report page subject filter", () => {
     await select('select[aria-label="Semua Kelas"]', "1");
     await select("#attendance-report-mapel", "2");
     await select("#attendance-report-status", "below_90");
-    expect(reportService.getAttendanceReports).toHaveBeenLastCalledWith("1", { mapelId: "2", attendanceStatus: "below_90" });
+    expect(reportService.getAttendanceReports).toHaveBeenLastCalledWith("1", { mapelId: "2", attendanceStatus: "below_90", ...defaultSorting });
     await select("#attendance-report-status", "at_least_90");
-    expect(reportService.getAttendanceReports).toHaveBeenLastCalledWith("1", { mapelId: "2", attendanceStatus: "at_least_90" });
+    expect(reportService.getAttendanceReports).toHaveBeenLastCalledWith("1", { mapelId: "2", attendanceStatus: "at_least_90", ...defaultSorting });
     await select("#attendance-report-mapel", "3");
     expect(status.value).toBe("at_least_90");
-    expect(reportService.getAttendanceReports).toHaveBeenLastCalledWith("1", { mapelId: "3", attendanceStatus: "at_least_90" });
+    expect(reportService.getAttendanceReports).toHaveBeenLastCalledWith("1", { mapelId: "3", attendanceStatus: "at_least_90", ...defaultSorting });
     await select("#attendance-report-status", "all");
-    expect(reportService.getAttendanceReports).toHaveBeenLastCalledWith("1", { mapelId: "3", attendanceStatus: "all" });
+    expect(reportService.getAttendanceReports).toHaveBeenLastCalledWith("1", { mapelId: "3", attendanceStatus: "all", ...defaultSorting });
   });
 
   it("shows and exports missing attendance as neutral while real zero attendance stays 0%", async () => {
@@ -244,7 +249,90 @@ describe("attendance report page subject filter", () => {
     expect(element('[role="alert"]')).toHaveTextContent("Filter kehadiran gagal");
     expect(button("Ekspor Excel")).toBeDisabled();
     await act(async () => { button("Coba Lagi").click(); });
-    expect(reportService.getAttendanceReports).toHaveBeenLastCalledWith("1", { mapelId: "2", attendanceStatus: "below_90" });
+    expect(reportService.getAttendanceReports).toHaveBeenLastCalledWith("1", { mapelId: "2", attendanceStatus: "below_90", ...defaultSorting });
     expect(container.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it("starts at name ascending, toggles directions and resets a newly selected column to ascending", async () => {
+    await renderPage();
+    expect(button("Nama Siswa").closest("th")).toHaveAttribute("aria-sort", "ascending");
+    await click("Nama Siswa");
+    expect(reportService.getAttendanceReports).toHaveBeenLastCalledWith(undefined, {
+      mapelId: undefined, attendanceStatus: "all", sortBy: "name", sortOrder: "desc",
+    });
+    expect(button("Nama Siswa").closest("th")).toHaveAttribute("aria-sort", "descending");
+    await click("Nama Siswa");
+    expect(button("Nama Siswa").closest("th")).toHaveAttribute("aria-sort", "ascending");
+    await click("Persentase Kehadiran");
+    expect(reportService.getAttendanceReports).toHaveBeenLastCalledWith(undefined, {
+      mapelId: undefined, attendanceStatus: "all", sortBy: "percentage", sortOrder: "asc",
+    });
+    expect(button("Nama Siswa").closest("th")).toHaveAttribute("aria-sort", "none");
+    await click("Persentase Kehadiran");
+    expect(button("Persentase Kehadiran").closest("th")).toHaveAttribute("aria-sort", "descending");
+    await click("Nama Siswa");
+    expect(button("Nama Siswa").closest("th")).toHaveAttribute("aria-sort", "ascending");
+  });
+
+  it("preserves filter and search state and exports rows in the exact backend order", async () => {
+    await renderPage();
+    await select('select[aria-label="Semua Kelas"]', "1");
+    await select("#attendance-report-mapel", "2");
+    await select("#attendance-report-status", "below_90");
+    await search("i");
+    const lowBudi = { ...budi, hadir: 4, alpa: 1, percentage: 80 };
+    const zeroAni = { ...ani, hadir: 0, alpa: 5, percentage: 0 };
+    vi.mocked(reportService.getAttendanceReports)
+      .mockResolvedValueOnce([zeroAni, lowBudi]).mockResolvedValueOnce([lowBudi, zeroAni]);
+    await click("Persentase Kehadiran");
+    await click("Persentase Kehadiran");
+    expect(reportService.getAttendanceReports).toHaveBeenLastCalledWith("1", {
+      mapelId: "2", attendanceStatus: "below_90", sortBy: "percentage", sortOrder: "desc",
+    });
+    expect([...container.querySelectorAll("tbody tr td:first-child")].map((cell) => cell.textContent)).toEqual(["456", "123"]);
+    await click("Ekspor Excel");
+    expect(exportToExcel).toHaveBeenLastCalledWith([
+      expect.objectContaining({ NIS: "456", "Persentase Kehadiran (%)": "80%" }),
+      expect.objectContaining({ NIS: "123", "Persentase Kehadiran (%)": "0%" }),
+    ], expect.any(String));
+    await select("#attendance-report-mapel", "3");
+    expect(reportService.getAttendanceReports).toHaveBeenLastCalledWith("1", {
+      mapelId: "3", attendanceStatus: "below_90", sortBy: "percentage", sortOrder: "desc",
+    });
+    expect(element<HTMLInputElement>('input[aria-label="Cari siswa atau NIS..."]').value).toBe("i");
+    expect(button("Persentase Kehadiran").closest("th")).toHaveAttribute("aria-sort", "descending");
+  });
+
+  it("ignores a stale sorting response after a newer filter request", async () => {
+    await renderPage();
+    const older = deferred<StudentAttendanceSummary[]>();
+    vi.mocked(reportService.getAttendanceReports).mockReturnValueOnce(older.promise).mockResolvedValueOnce([budi]);
+    await click("Persentase Kehadiran");
+    expect(button("Ekspor Excel")).toBeDisabled();
+    expect(container.querySelector("table")).toBeNull();
+    await select("#attendance-report-mapel", "2");
+    await act(async () => { older.resolve([ani]); });
+    expect(element("tbody")).toHaveTextContent("Budi");
+    expect(element("tbody")).not.toHaveTextContent("Ani");
+    expect(button("Persentase Kehadiran").closest("th")).toHaveAttribute("aria-sort", "ascending");
+    expect(reportService.getAttendanceReports).toHaveBeenLastCalledWith(undefined, {
+      mapelId: "2", attendanceStatus: "all", sortBy: "percentage", sortOrder: "asc",
+    });
+  });
+
+  it("retries sorting errors with the selected class, subject and category", async () => {
+    await renderPage();
+    await select('select[aria-label="Semua Kelas"]', "1");
+    await select("#attendance-report-mapel", "2");
+    await select("#attendance-report-status", "below_90");
+    vi.mocked(reportService.getAttendanceReports).mockRejectedValueOnce(new Error("Pengurutan gagal"));
+    await click("Persentase Kehadiran");
+    expect(element('[role="alert"]')).toHaveTextContent("Pengurutan gagal");
+    expect(button("Ekspor Excel")).toBeDisabled();
+    await click("Coba Lagi");
+    expect(reportService.getAttendanceReports).toHaveBeenLastCalledWith("1", {
+      mapelId: "2", attendanceStatus: "below_90", sortBy: "percentage", sortOrder: "asc",
+    });
+    expect(button("Persentase Kehadiran").closest("th")).toHaveAttribute("aria-sort", "ascending");
   });
 });

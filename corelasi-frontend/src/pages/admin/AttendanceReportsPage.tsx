@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { reportService } from "@/services/reportService";
 import { academicService } from "@/services/academicService";
 import type { Kelas, MataPelajaran } from "@/types/academic";
-import type { AttendanceStatus, StudentAttendanceSummary } from "@/types/report";
+import type { AttendanceSortBy, AttendanceSortOrder, AttendanceStatus, StudentAttendanceSummary } from "@/types/report";
 import {
   DataTable,
   Button,
@@ -28,6 +28,9 @@ export const AttendanceReportsPage: React.FC = () => {
   const [selectedClass, setSelectedClass] = useState("");
   const [selectedMapel, setSelectedMapel] = useState("");
   const [attendanceStatus, setAttendanceStatus] = useState<AttendanceStatus>("all");
+  const [sorting, setSorting] = useState<{ sortBy: AttendanceSortBy; sortOrder: AttendanceSortOrder }>({
+    sortBy: "name", sortOrder: "asc",
+  });
   const [classes, setClasses] = useState<Kelas[]>([]);
   const [subjects, setSubjects] = useState<MataPelajaran[]>([]);
   const [retry, setRetry] = useState(0);
@@ -36,7 +39,7 @@ export const AttendanceReportsPage: React.FC = () => {
 
   useEffect(() => {
     let active = true;
-    const filtersKey = JSON.stringify([selectedClass, selectedMapel, attendanceStatus, retry]);
+    const filtersKey = JSON.stringify([selectedClass, selectedMapel, attendanceStatus, sorting, retry]);
     const loadReports = async () => {
       setLoading(true);
       setError(null);
@@ -45,6 +48,7 @@ export const AttendanceReportsPage: React.FC = () => {
           reportService.getAttendanceReports(selectedClass || undefined, {
             mapelId: selectedMapel || undefined,
             attendanceStatus,
+            ...sorting,
           }),
           academicService.getKelas(),
           academicService.getMapel(),
@@ -67,9 +71,17 @@ export const AttendanceReportsPage: React.FC = () => {
     };
     void loadReports();
     return () => { active = false; };
-  }, [selectedClass, selectedMapel, attendanceStatus, retry]);
+  }, [selectedClass, selectedMapel, attendanceStatus, sorting, retry]);
 
-  const pending = loading || loadedFilters !== JSON.stringify([selectedClass, selectedMapel, attendanceStatus, retry]);
+  const pending = loading || loadedFilters !== JSON.stringify([selectedClass, selectedMapel, attendanceStatus, sorting, retry]);
+
+  const handleSortChange = (key: string) => {
+    if (key !== "name" && key !== "percentage") return;
+    setSorting((current) => ({
+      sortBy: key,
+      sortOrder: current.sortBy === key && current.sortOrder === "asc" ? "desc" : "asc",
+    }));
+  };
 
   const filteredReports = useMemo(() => {
     let result = [...reports];
@@ -117,6 +129,7 @@ export const AttendanceReportsPage: React.FC = () => {
     },
     {
       header: "Nama Siswa",
+      sortKey: "name",
       cell: (r: StudentAttendanceSummary) => (
         <span className="text-[13px] font-semibold text-bg-ink">
           {r.siswaName}
@@ -163,6 +176,7 @@ export const AttendanceReportsPage: React.FC = () => {
     },
     {
       header: "Persentase Kehadiran",
+      sortKey: "percentage",
       cell: (r: StudentAttendanceSummary) => {
         if (!hasAttendanceData(r)) {
           return <StatusBadge label={getAttendancePercentageLabel(r)} state="neutral" size="xs" />;
@@ -274,6 +288,9 @@ export const AttendanceReportsPage: React.FC = () => {
           columns={columns}
           data={filteredReports}
           keyExtractor={(r) => r.siswaId}
+          sortBy={sorting.sortBy}
+          sortOrder={sorting.sortOrder}
+          onSortChange={handleSortChange}
           emptyStateTitle="Tidak ada data"
           emptyStateDescription="Tidak ada data kehadiran yang sesuai dengan filter atau pencarian."
         />
