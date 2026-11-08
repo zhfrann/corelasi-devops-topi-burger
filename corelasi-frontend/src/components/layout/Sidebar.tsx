@@ -20,6 +20,8 @@ import {
   BookMarked,
   FileCheck2,
   Award,
+  FileText,
+  Clock,
 } from "lucide-react";
 
 interface MenuItem {
@@ -165,6 +167,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
             icon: <FileBarChart className="h-4 w-4" />,
           },
           {
+            title: "Persetujuan Izin",
+            path: "/guru/izin/persetujuan",
+            icon: <ClipboardCheck className="h-4 w-4" />,
+          },
+          {
             title: "Jurnal Pertemuan",
             path: "/guru/journals",
             icon: <BookOpen className="h-4 w-4" />,
@@ -266,6 +273,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
           title: "Absensi Saya",
           path: "/siswa/attendance",
           icon: <ClipboardCheck className="h-4 w-4" />,
+        },
+        {
+          title: "Pengajuan Izin",
+          path: "/siswa/izin/pengajuan",
+          icon: <FileText className="h-4 w-4" />,
+        },
+        {
+          title: "Riwayat Izin",
+          path: "/siswa/izin/riwayat",
+          icon: <Clock className="h-4 w-4" />,
         },
       ],
     },
