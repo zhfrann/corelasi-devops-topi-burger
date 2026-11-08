@@ -49,4 +49,21 @@ describe("attendance report API parameters", () => {
     await reportService.getAttendanceReports(undefined, { attendanceStatus: "below_90" });
     expect(apiGet).toHaveBeenLastCalledWith("/reports/attendance/", { attendanceStatus: "below_90" });
   });
+
+  it("passes whitelisted sorting combinations alongside all active filters", async () => {
+    vi.stubEnv("MODE", "production");
+    vi.resetModules();
+    const { apiGet } = await import("@/services/api");
+    const { reportService } = await import("@/services/reportService");
+    for (const sortBy of ["name", "percentage"] as const) {
+      for (const sortOrder of ["asc", "desc"] as const) {
+        await reportService.getAttendanceReports("1", { mapelId: "2", attendanceStatus: "below_90", sortBy, sortOrder });
+        expect(apiGet).toHaveBeenLastCalledWith("/reports/attendance/", {
+          kelasId: "1", mapelId: "2", attendanceStatus: "below_90", sortBy, sortOrder,
+        });
+      }
+    }
+    await reportService.getAttendanceReports(undefined, { sortBy: "percentage", sortOrder: "asc" });
+    expect(apiGet).toHaveBeenLastCalledWith("/reports/attendance/", { sortBy: "percentage", sortOrder: "asc" });
+  });
 });

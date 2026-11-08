@@ -85,6 +85,16 @@ class AttendanceReportView(APIView):
                 "percentage": percentage
             })
             
+        descending = query.validated_data["sortOrder"] == "desc"
+        reports.sort(key=lambda row: (row["siswaName"].lower(), row["siswaId"]))
+        if query.validated_data["sortBy"] == "percentage":
+            reports.sort(key=lambda row: (
+                row["hadir"] + row["sakit"] + row["izin"] + row["alpa"] == 0,
+                -row["percentage"] if descending else row["percentage"],
+            ))
+        elif descending:
+            reports.sort(key=lambda row: row["siswaName"].lower(), reverse=True)
+
         return StandardResponse.success(data=reports)
 
 
