@@ -9,6 +9,7 @@ from learning.models import Tugas, Submission
 from journals.models import JurnalPertemuan
 from shared.responses import StandardResponse
 from shared.access import is_duty_teacher, teacher_class_ids
+from reports.serializers import AttendanceReportQuerySerializer
 
 User = get_user_model()
 
@@ -26,7 +27,13 @@ class AttendanceReportView(APIView):
     permission_classes = [IsAdminOrGuru]
 
     def get(self, request):
+        query = AttendanceReportQuerySerializer(data=request.query_params)
+        if not query.is_valid():
+            return StandardResponse.error(
+                message="Filter laporan kehadiran tidak valid.", errors=query.errors,
+            )
         kelas_id = request.query_params.get("kelasId")
+        mapel_id = query.validated_data.get("mapelId")
         
         students = User.objects.filter(role="siswa").select_related("kelas")
         if request.user.role == "guru" and not is_duty_teacher(request.user):
@@ -37,6 +44,8 @@ class AttendanceReportView(APIView):
         reports = []
         for student in students:
             records = AbsensiSiswa.objects.filter(siswa=student)
+            if mapel_id is not None:
+                records = records.filter(mapel_id=mapel_id)
             
             hadir = 0
             sakit = 0

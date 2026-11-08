@@ -1,3 +1,7 @@
+export interface AttendanceReportFilters {
+  mapelId?: string;
+}
+
 export interface StudentAttendanceSummary {
   siswaId: string;
   siswaName: string;

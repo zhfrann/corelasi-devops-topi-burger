@@ -96,3 +96,40 @@ describe("Report Service Unit Tests", () => {
     expect(report.journalCompletionRate).toBeGreaterThan(0);
   });
 });
+
+describe("Attendance report subject aggregation", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("corelasi_users_db", JSON.stringify([
+      { id: "a", name: "Ani", role: "siswa", kelasId: "k-1", kelasName: "X-A" },
+      { id: "b", name: "Budi", role: "siswa", kelasId: "k-1", kelasName: "X-A" },
+      { id: "c", name: "Citra", role: "siswa", kelasId: "k-2", kelasName: "X-B" },
+    ]));
+    localStorage.setItem("corelasi_attendance_siswa", JSON.stringify([
+      { id: "1", siswaId: "a", mapelId: "mp-1", status: "Hadir" },
+      { id: "2", siswaId: "a", mapelId: "mp-2", status: "Alpa" },
+      { id: "3", siswaId: "a", mapelId: null, status: "Sakit" },
+      { id: "4", siswaId: "c", mapelId: "mp-1", status: "Izin" },
+    ]));
+  });
+
+  it("includes subjectless records for all subjects", async () => {
+    const rows = await reportService.getAttendanceReports(undefined, { mapelId: "" });
+    expect(rows[0]).toMatchObject({ hadir: 1, sakit: 1, alpa: 1, percentage: 33 });
+  });
+
+  it("filters records before counting and preserves class and roster", async () => {
+    const rows = await reportService.getAttendanceReports("k-1", { mapelId: "mp-1" });
+    expect(rows.map((row) => row.siswaId)).toEqual(["a", "b"]);
+    expect(rows[0]).toMatchObject({ hadir: 1, sakit: 0, alpa: 0, percentage: 100 });
+    expect(rows[1]).toMatchObject({ hadir: 0, sakit: 0, izin: 0, alpa: 0, percentage: 0 });
+  });
+
+  it("keeps zero counts when the selected subject has no attendance", async () => {
+    const rows = await reportService.getAttendanceReports(undefined, { mapelId: "mp-empty" });
+    expect(rows).toHaveLength(3);
+    for (const row of rows) {
+      expect(row).toMatchObject({ hadir: 0, sakit: 0, izin: 0, alpa: 0, percentage: 0 });
+    }
+  });
+});

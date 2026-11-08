@@ -172,3 +172,76 @@ class ReportAPITests(APITestCase):
         self.assertEqual(attendance_response.data["data"][0]["hadir"], 0)
         self.assertEqual(attendance_response.data["data"][0]["percentage"], 0)
         self.assertEqual(grades_response.data["data"][0]["average"], 0)
+
+
+class AttendanceSubjectFilterTests(APITestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.admin = User.objects.create_user(email="admin-subject@test.local", name="Admin", role="admin")
+        cls.teacher = User.objects.create_user(email="teacher-subject@test.local", name="Guru", role="guru")
+        cls.kelas = Kelas.objects.create(name="X-A", tingkat="X", wali_kelas=cls.teacher)
+        cls.other_class = Kelas.objects.create(name="X-B", tingkat="X")
+        cls.student = User.objects.create_user(email="subject@test.local", name="Ani", role="siswa", kelas=cls.kelas)
+        cls.empty_student = User.objects.create_user(email="empty@test.local", name="Budi", role="siswa", kelas=cls.kelas)
+        cls.other_student = User.objects.create_user(email="other@test.local", name="Citra", role="siswa", kelas=cls.other_class)
+        cls.subject = MataPelajaran.objects.create(name="Matematika")
+        cls.other_subject = MataPelajaran.objects.create(name="Fisika")
+        cls.empty_subject = MataPelajaran.objects.create(name="Kimia")
+        for subject, value in [(cls.subject, "Hadir"), (cls.other_subject, "Alpa"), (None, "Sakit")]:
+            AbsensiSiswa.objects.create(siswa=cls.student, kelas=cls.kelas, mapel=subject,
+                                        tanggal="2026-06-08", status=value)
+        AbsensiSiswa.objects.create(siswa=cls.other_student, kelas=cls.other_class,
+                                    mapel=cls.subject, tanggal="2026-06-08", status="Izin")
+
+    def setUp(self):
+        self.url = "/api/reports/attendance/"
+        self.client.force_authenticate(self.admin)
+
+    def test_all_subjects_includes_records_without_subject(self):
+        for params in [{}, {"mapelId": ""}]:
+            with self.subTest(params=params):
+                response = self.client.get(self.url, params)
+                self.assertEqual(response.status_code, 200)
+                row = next(row for row in response.data["data"] if row["siswaId"] == self.student.id)
+                self.assertEqual((row["hadir"], row["sakit"], row["alpa"], row["percentage"]), (1, 1, 1, 33))
+
+    def test_subject_filters_records_before_counts_and_percentage(self):
+        response = self.client.get(self.url, {"mapelId": self.subject.id})
+        self.assertEqual(response.status_code, 200)
+        row = next(row for row in response.data["data"] if row["siswaId"] == self.student.id)
+        self.assertEqual((row["hadir"], row["sakit"], row["izin"], row["alpa"], row["percentage"]), (1, 0, 0, 0, 100))
+
+    def test_class_and_subject_preserve_roster_without_attendance(self):
+        response = self.client.get(self.url, {"kelasId": self.kelas.id, "mapelId": self.subject.id})
+        rows = {row["siswaId"]: row for row in response.data["data"]}
+        self.assertEqual(set(rows), {self.student.id, self.empty_student.id})
+        self.assertEqual(rows[self.student.id]["hadir"], 1)
+        self.assertEqual(rows[self.empty_student.id]["percentage"], 0)
+
+    def test_existing_subject_without_records_returns_zero_counts(self):
+        response = self.client.get(self.url, {"mapelId": self.empty_subject.id})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["data"]), 3)
+        for row in response.data["data"]:
+            self.assertEqual([row[key] for key in ("hadir", "sakit", "izin", "alpa", "percentage")], [0] * 5)
+
+    def test_invalid_subject_returns_standard_bad_request(self):
+        for value in ["abc", "0", "-1", "1.0", "+1", " 1", "999999999", "9" * 100, "9223372036854775808"]:
+            with self.subTest(value=value):
+                response = self.client.get(self.url, {"mapelId": value})
+                self.assertEqual(response.status_code, 400)
+                self.assertFalse(response.data["success"])
+                self.assertIn("mapelId", response.data["errors"])
+
+    def test_subject_filter_preserves_teacher_scope(self):
+        self.client.force_authenticate(self.teacher)
+        response = self.client.get(self.url, {"mapelId": self.subject.id})
+        self.assertEqual({row["siswaId"] for row in response.data["data"]}, {self.student.id, self.empty_student.id})
+        response = self.client.get(self.url, {"kelasId": self.other_class.id, "mapelId": self.subject.id})
+        self.assertEqual(response.data["data"], [])
+
+    def test_subject_filter_preserves_authentication_and_student_denial(self):
+        self.client.force_authenticate(None)
+        self.assertEqual(self.client.get(self.url, {"mapelId": self.subject.id}).status_code, 401)
+        self.client.force_authenticate(self.student)
+        self.assertEqual(self.client.get(self.url, {"mapelId": self.subject.id}).status_code, 403)

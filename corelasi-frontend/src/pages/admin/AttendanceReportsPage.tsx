@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { reportService } from "@/services/reportService";
+import { academicService } from "@/services/academicService";
+import type { Kelas, MataPelajaran } from "@/types/academic";
 import type { StudentAttendanceSummary } from "@/types/report";
 import {
   DataTable,
@@ -9,6 +11,7 @@ import {
   Toast,
   LoadingState,
   ErrorState,
+  Select,
 } from "@/components/shared";
 import type { SemanticState } from "@/utils/semanticState";
 import { Download } from "lucide-react";
@@ -22,46 +25,64 @@ export const AttendanceReportsPage: React.FC = () => {
   // Filters
   const [search, setSearch] = useState("");
   const [selectedClass, setSelectedClass] = useState("");
+  const [selectedMapel, setSelectedMapel] = useState("");
+  const [classes, setClasses] = useState<Kelas[]>([]);
+  const [subjects, setSubjects] = useState<MataPelajaran[]>([]);
+  const [retry, setRetry] = useState(0);
+  const [loadedFilters, setLoadedFilters] = useState("");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const fetchReports = async () => {
-    await Promise.resolve();
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await reportService.getAttendanceReports();
-      setReports(data);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Gagal memuat data rekap absensi.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    void Promise.resolve().then(fetchReports);
-  }, []);
+    let active = true;
+    const filtersKey = JSON.stringify([selectedClass, selectedMapel, retry]);
+    const loadReports = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const [data, kelas, mapel] = await Promise.all([
+          reportService.getAttendanceReports(selectedClass || undefined, {
+            mapelId: selectedMapel || undefined,
+          }),
+          academicService.getKelas(),
+          academicService.getMapel(),
+        ]);
+        if (active) {
+          setReports(data);
+          setClasses(kelas);
+          setSubjects(mapel);
+        }
+      } catch (err) {
+        if (active) {
+          setError(err instanceof Error ? err.message : "Gagal memuat data rekap absensi.");
+        }
+      } finally {
+        if (active) {
+          setLoadedFilters(filtersKey);
+          setLoading(false);
+        }
+      }
+    };
+    void loadReports();
+    return () => { active = false; };
+  }, [selectedClass, selectedMapel, retry]);
+
+  const pending = loading || loadedFilters !== JSON.stringify([selectedClass, selectedMapel, retry]);
 
   const filteredReports = useMemo(() => {
     let result = [...reports];
 
     if (search.trim()) {
-      const term = search.toLowerCase();
+      const term = search.trim().toLowerCase();
       result = result.filter(
         (r) => r.siswaName.toLowerCase().includes(term) || r.nis.includes(term),
       );
     }
 
-    if (selectedClass) {
-      result = result.filter((r) => r.kelasName === selectedClass);
-    }
-
     return result;
-  }, [search, selectedClass, reports]);
+  }, [search, reports]);
 
   const handleExportExcel = () => {
+    if (pending || error) return;
     if (filteredReports.length === 0) {
       setToastMessage("Tidak ada data untuk diekspor.");
       return;
@@ -154,12 +175,10 @@ export const AttendanceReportsPage: React.FC = () => {
     },
   ];
 
-  const classOptions = Array.from(new Set(reports.map((r) => r.kelasName))).map(
-    (cName) => ({
-      value: cName,
-      label: `Kelas ${cName}`,
-    }),
-  );
+  const classOptions = classes.map((kelas) => ({
+    value: String(kelas.id),
+    label: `Kelas ${kelas.name}`,
+  }));
 
   return (
     <div className="space-y-6">
@@ -183,6 +202,7 @@ export const AttendanceReportsPage: React.FC = () => {
         </div>
         <Button
           onClick={handleExportExcel}
+          disabled={pending || !!error}
           className="gap-1.5 font-semibold text-[12px] h-9 self-start sm:self-center"
         >
           <Download className="h-4 w-4" />
@@ -198,14 +218,33 @@ export const AttendanceReportsPage: React.FC = () => {
         filterValue={selectedClass}
         onFilterChange={setSelectedClass}
         filterPlaceholder="Semua Kelas"
+        filterLabel="Kelas"
         filterOptions={classOptions}
+        actions={
+          <div className="flex flex-col gap-1.5 min-w-[150px]">
+            <label htmlFor="attendance-report-mapel" className="text-[13px] font-semibold text-bg-ink-secondary">
+              Mata Pelajaran
+            </label>
+            <Select
+              id="attendance-report-mapel"
+              value={selectedMapel}
+              onChange={(event) => setSelectedMapel(event.target.value)}
+              className="h-9 py-1 pl-3.5 pr-10 text-[13px]"
+            >
+              <option value="">Semua Mapel</option>
+              {subjects.map((subject) => (
+                <option key={subject.id} value={String(subject.id)}>{subject.name}</option>
+              ))}
+            </Select>
+          </div>
+        }
       />
 
       {/* Main Table */}
-      {loading ? (
+      {pending ? (
         <LoadingState message="Memuat data rekap absensi..." />
       ) : error ? (
-        <ErrorState message={error} onRetry={fetchReports} />
+        <ErrorState message={error} onRetry={() => setRetry((value) => value + 1)} />
       ) : (
         <DataTable
           title="Tabel Rekapitulasi Presensi Siswa"
@@ -213,7 +252,7 @@ export const AttendanceReportsPage: React.FC = () => {
           data={filteredReports}
           keyExtractor={(r) => r.siswaId}
           emptyStateTitle="Tidak ada data"
-          emptyStateDescription="Belum ada data rekapitulasi kehadiran siswa yang tercatat."
+          emptyStateDescription="Tidak ada data kehadiran yang sesuai dengan filter atau pencarian."
         />
       )}
     </div>
