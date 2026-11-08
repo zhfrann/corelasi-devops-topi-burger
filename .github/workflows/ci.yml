@@ -102,7 +102,7 @@ jobs:
         run: |
           coverage run --source='apps,config' manage.py test
           coverage report -m
-          coverage lcov -o coverage.lcov
+          coverage xml -o coverage.xml
 
       - name: DevSecOps - Backend Dependency Security Audit
         run: pip-audit || true
@@ -111,7 +111,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: backend-coverage
-          path: corelasi-backend/coverage.lcov
+          path: corelasi-backend/coverage.xml
           retention-days: 7
 
   # ===============================================================
