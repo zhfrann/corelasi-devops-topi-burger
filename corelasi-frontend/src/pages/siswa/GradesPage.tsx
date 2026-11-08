@@ -10,7 +10,7 @@ import {
   ErrorState,
 } from "@/components/shared";
 import { Award, Clock, CheckSquare } from "lucide-react";
-import { searchGrades, type GradeRow } from "@/utils/gradeFilters";
+import { searchGrades, filterGradesByStatus, type GradeRow } from "@/utils/gradeFilters";
 
 import { getSiswaKelasId } from "@/utils/student";
 
@@ -21,6 +21,7 @@ export const GradesPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   const fetchGrades = useCallback(async () => {
     if (!user) return;
@@ -144,8 +145,10 @@ export const GradesPage: React.FC = () => {
   const pendingTugas = totalTugas - gradedTugas;
 
   const filteredGrades = useMemo(() => {
-    return searchGrades(grades, search);
-  }, [grades, search]);
+    let result = searchGrades(grades, search);
+    result = filterGradesByStatus(result, statusFilter);
+    return result;
+  }, [grades, search, statusFilter]);
 
   if (loading) {
     return <LoadingState message="Memuat data nilai Anda..." />;
@@ -202,6 +205,15 @@ export const GradesPage: React.FC = () => {
         onSearchChange={setSearch}
         searchPlaceholder="Cari tugas atau mata pelajaran..."
         searchLabel="Pencarian Evaluasi"
+        filterValue={statusFilter}
+        onFilterChange={setStatusFilter}
+        filterLabel="Status Penilaian"
+        filterPlaceholder="Semua Status"
+        filterOptions={[
+          { value: "all", label: "Semua Status" },
+          { value: "graded", label: "Sudah Dinilai" },
+          { value: "pending", label: "Menunggu Penilaian" },
+        ]}
       />
 
       {/* Main Table */}
@@ -212,8 +224,8 @@ export const GradesPage: React.FC = () => {
         keyExtractor={(g) => g.tugasId}
         emptyStateTitle="Tidak ada nilai"
         emptyStateDescription={
-          search.trim()
-            ? "Tidak ada nilai tugas atau mata pelajaran yang cocok dengan kata kunci pencarian Anda."
+          search.trim() || statusFilter !== "all"
+            ? "Tidak ada nilai tugas yang cocok dengan filter atau kata kunci pencarian Anda."
             : "Belum ada data nilai tugas mandiri yang terbit untuk kelas Anda."
         }
       />

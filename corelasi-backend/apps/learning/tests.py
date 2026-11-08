@@ -624,3 +624,78 @@ class LearningAPITests(APITestCase):
         response = self.client.get(self.my_grades_url)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
+    def test_student_can_filter_grades_by_status_graded(self):
+        t1 = Tugas.objects.create(
+            title="Tugas Dinilai",
+            description="Sudah dinilai",
+            due_date=datetime.date.today() + datetime.timedelta(days=1),
+            kelas=self.kelas_a,
+            mapel=self.mapel,
+            guru=self.teacher,
+            status="Dipublikasikan",
+        )
+        Tugas.objects.create(
+            title="Tugas Belum Dinilai",
+            description="Belum dinilai",
+            due_date=datetime.date.today() + datetime.timedelta(days=2),
+            kelas=self.kelas_a,
+            mapel=self.mapel,
+            guru=self.teacher,
+            status="Dipublikasikan",
+        )
+        Submission.objects.create(
+            tugas=t1,
+            siswa=self.siswa,
+            status="Terkumpul",
+            grade=85,
+        )
+
+        self.client.force_authenticate(user=self.siswa)
+        response = self.client.get(self.my_grades_url, {"status": "graded"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        grades = response.data["data"]["grades"]
+        self.assertEqual(len(grades), 1)
+        self.assertEqual(grades[0]["tugasTitle"], "Tugas Dinilai")
+        self.assertEqual(grades[0]["score"], 85)
+
+    def test_student_can_filter_grades_by_status_pending(self):
+        t1 = Tugas.objects.create(
+            title="Tugas Dinilai 2",
+            description="Sudah dinilai",
+            due_date=datetime.date.today() + datetime.timedelta(days=1),
+            kelas=self.kelas_a,
+            mapel=self.mapel,
+            guru=self.teacher,
+            status="Dipublikasikan",
+        )
+        Tugas.objects.create(
+            title="Tugas Belum Dinilai 2",
+            description="Belum dinilai",
+            due_date=datetime.date.today() + datetime.timedelta(days=2),
+            kelas=self.kelas_a,
+            mapel=self.mapel,
+            guru=self.teacher,
+            status="Dipublikasikan",
+        )
+        Submission.objects.create(
+            tugas=t1,
+            siswa=self.siswa,
+            status="Terkumpul",
+            grade=85,
+        )
+
+        self.client.force_authenticate(user=self.siswa)
+        response = self.client.get(self.my_grades_url, {"status": "pending"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        grades = response.data["data"]["grades"]
+        self.assertEqual(len(grades), 1)
+        self.assertEqual(grades[0]["tugasTitle"], "Tugas Belum Dinilai 2")
+        self.assertIsNone(grades[0]["score"])
+
+    def test_student_filter_grades_invalid_status_returns_400(self):
+        self.client.force_authenticate(user=self.siswa)
+        response = self.client.get(self.my_grades_url, {"status": "invalid_status"})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(response.data["success"])
+
+

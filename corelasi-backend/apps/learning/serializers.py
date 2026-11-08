@@ -68,7 +68,16 @@ class StudentGradesQuerySerializer(serializers.Serializer):
     search = serializers.CharField(
         required=False, allow_blank=True, default="", max_length=100
     )
+    status = serializers.ChoiceField(
+        choices=("all", "graded", "pending"),
+        required=False,
+        default="all",
+        allow_blank=True,
+    )
 
     def validate_search(self, value):
         return (value or "").strip()
+
+    def validate_status(self, value):
+        return value or "all"
 

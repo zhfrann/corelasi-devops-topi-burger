@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   searchGrades,
+  filterGradesByStatus,
   type GradeRow,
 } from "../utils/gradeFilters";
 
@@ -65,4 +66,26 @@ describe("Grade Filters Utility Tests (Fadhli)", () => {
       expect(result).toHaveLength(0);
     });
   });
+
+  describe("filterGradesByStatus", () => {
+    it("harus mengembalikan semua data bila status adalah 'all' atau undefined", () => {
+      expect(filterGradesByStatus(mockGrades, "all")).toHaveLength(4);
+      expect(filterGradesByStatus(mockGrades)).toHaveLength(4);
+    });
+
+    it("harus menyaring hanya tugas yang sudah memiliki nilai ketika status 'graded'", () => {
+      const result = filterGradesByStatus(mockGrades, "graded");
+      expect(result).toHaveLength(3);
+      expect(result.every((g) => g.score !== undefined)).toBe(true);
+      expect(result.map((g) => g.tugasId)).toEqual(["tug-1", "tug-2", "tug-4"]);
+    });
+
+    it("harus menyaring hanya tugas yang belum memiliki nilai ketika status 'pending'", () => {
+      const result = filterGradesByStatus(mockGrades, "pending");
+      expect(result).toHaveLength(1);
+      expect(result[0].tugasId).toBe("tug-3");
+      expect(result[0].score).toBeUndefined();
+    });
+  });
 });
+

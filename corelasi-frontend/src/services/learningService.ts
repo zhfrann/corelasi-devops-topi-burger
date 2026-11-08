@@ -354,7 +354,7 @@ export const learningService = {
   },
 
   // --- STUDENT GRADES ---
-  async getMyGrades(params?: { search?: string }): Promise<{
+  async getMyGrades(params?: { search?: string; status?: string }): Promise<{
     summary: {
       average: number;
       totalTugas: number;
@@ -396,6 +396,12 @@ export const learningService = {
           g.tugasTitle.toLowerCase().includes(clean) ||
           g.mapelName.toLowerCase().includes(clean),
       );
+    }
+
+    if (params?.status === "graded") {
+      gradesList = gradesList.filter((g) => g.score !== undefined);
+    } else if (params?.status === "pending") {
+      gradesList = gradesList.filter((g) => g.score === undefined);
     }
 
     const scored = gradesList.filter((g) => g.score !== undefined);

@@ -555,6 +555,7 @@ class StudentGradesView(APIView):
             )
 
         search_term = query.validated_data.get("search", "")
+        status_filter = query.validated_data.get("status", "all")
 
         # Get published assignments for the student's class
         tugas_qs = (
@@ -608,6 +609,11 @@ class StudentGradesView(APIView):
             if scored_list
             else 0
         )
+
+        if status_filter == "graded":
+            grades_list = [g for g in grades_list if g["score"] is not None]
+        elif status_filter == "pending":
+            grades_list = [g for g in grades_list if g["score"] is None]
 
         return StandardResponse.success(
             data={

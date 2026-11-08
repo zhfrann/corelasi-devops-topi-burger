@@ -6,8 +6,11 @@ export interface GradeRow {
   feedback?: string;
 }
 
+export type GradeStatusFilter = "all" | "graded" | "pending";
+
 export interface GradeFilterCriteria {
   searchQuery?: string;
+  status?: GradeStatusFilter | string;
 }
 
 /**
@@ -26,3 +29,21 @@ export function searchGrades(
     return titleMatch || mapelMatch;
   });
 }
+
+/**
+ * Filter grades list by grading status: all, graded (score exists), or pending (score undefined)
+ */
+export function filterGradesByStatus(
+  grades: GradeRow[],
+  status?: GradeStatusFilter | string,
+): GradeRow[] {
+  if (!status || status === "all") return grades;
+  if (status === "graded") {
+    return grades.filter((g) => g.score !== undefined);
+  }
+  if (status === "pending") {
+    return grades.filter((g) => g.score === undefined);
+  }
+  return grades;
+}
+
