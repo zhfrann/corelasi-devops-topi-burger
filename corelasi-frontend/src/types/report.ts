@@ -1,5 +1,8 @@
+export type AttendanceStatus = "all" | "below_90" | "at_least_90";
+
 export interface AttendanceReportFilters {
   mapelId?: string;
+  attendanceStatus?: AttendanceStatus;
 }
 
 export interface StudentAttendanceSummary {

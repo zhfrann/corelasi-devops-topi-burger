@@ -34,4 +34,19 @@ describe("attendance report API parameters", () => {
     await reportService.getAttendanceReports(undefined, { mapelId: "" });
     expect(apiGet).toHaveBeenLastCalledWith("/reports/attendance/", undefined);
   });
+
+  it("sends each attendance category with the active class and subject", async () => {
+    vi.stubEnv("MODE", "production");
+    vi.resetModules();
+    const { apiGet } = await import("@/services/api");
+    const { reportService } = await import("@/services/reportService");
+    for (const attendanceStatus of ["all", "below_90", "at_least_90"] as const) {
+      await reportService.getAttendanceReports("1", { mapelId: "2", attendanceStatus });
+      expect(apiGet).toHaveBeenLastCalledWith("/reports/attendance/", {
+        kelasId: "1", mapelId: "2", attendanceStatus,
+      });
+    }
+    await reportService.getAttendanceReports(undefined, { attendanceStatus: "below_90" });
+    expect(apiGet).toHaveBeenLastCalledWith("/reports/attendance/", { attendanceStatus: "below_90" });
+  });
 });

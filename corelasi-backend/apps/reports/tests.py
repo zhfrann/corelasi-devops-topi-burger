@@ -245,3 +245,119 @@ class AttendanceSubjectFilterTests(APITestCase):
         self.assertEqual(self.client.get(self.url, {"mapelId": self.subject.id}).status_code, 401)
         self.client.force_authenticate(self.student)
         self.assertEqual(self.client.get(self.url, {"mapelId": self.subject.id}).status_code, 403)
+
+
+class AttendancePercentageFilterTests(APITestCase):
+    @classmethod
+    def add_attendance(cls, student, subject, present, total):
+        AbsensiSiswa.objects.bulk_create([
+            AbsensiSiswa(
+                siswa=student, kelas=student.kelas, mapel=subject,
+                tanggal=datetime.date(2026, 1, 1) + datetime.timedelta(days=index),
+                status="Hadir" if index < present else "Alpa",
+            )
+            for index in range(total)
+        ])
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.admin = User.objects.create_user(email="percentage-admin@test.local", name="Admin", role="admin")
+        cls.teacher = User.objects.create_user(email="percentage-teacher@test.local", name="Guru", role="guru")
+        cls.kelas = Kelas.objects.create(name="XI-A", tingkat="XI", wali_kelas=cls.teacher)
+        cls.other_class = Kelas.objects.create(name="XI-B", tingkat="XI")
+        cls.subject = MataPelajaran.objects.create(name="Matematika")
+        cls.other_subject = MataPelajaran.objects.create(name="Fisika")
+        cls.empty_subject = MataPelajaran.objects.create(name="Kimia")
+        for label, present, total in [
+            ("low", 4, 5), ("boundary", 9, 10), ("full", 5, 5),
+            ("zero", 0, 5), ("empty", 0, 0), ("rounded", 112, 125),
+        ]:
+            student = User.objects.create_user(
+                email=f"{label}@percentage.test", name=label, role="siswa", kelas=cls.kelas,
+            )
+            setattr(cls, label, student)
+            cls.add_attendance(student, cls.subject, present, total)
+        cls.add_attendance(cls.low, cls.other_subject, 5, 5)
+        cls.add_attendance(cls.full, cls.other_subject, 0, 5)
+        cls.outside = User.objects.create_user(
+            email="outside@percentage.test", name="Outside", role="siswa", kelas=cls.other_class,
+        )
+        cls.add_attendance(cls.outside, cls.subject, 4, 5)
+
+    def setUp(self):
+        self.url = "/api/reports/attendance/"
+        self.client.force_authenticate(self.admin)
+        self.params = {"kelasId": self.kelas.id, "mapelId": self.subject.id}
+
+    def rows_for(self, category):
+        response = self.client.get(self.url, {**self.params, "attendanceStatus": category})
+        self.assertEqual(response.status_code, 200)
+        return {row["siswaId"]: row for row in response.data["data"]}
+
+    def test_all_omitted_and_empty_categories_include_students_without_data(self):
+        baseline = self.client.get(self.url, self.params).data["data"]
+        self.assertEqual(len(baseline), 6)
+        for category in ["", "all"]:
+            self.assertEqual(list(self.rows_for(category).values()), baseline)
+        row = self.rows_for("all")[self.empty.id]
+        self.assertEqual([row[key] for key in ("hadir", "sakit", "izin", "alpa", "percentage")], [0] * 5)
+
+    def test_below_90_includes_80_and_real_zero_but_not_missing_data(self):
+        rows = self.rows_for("below_90")
+        self.assertEqual(set(rows), {self.low.id, self.zero.id})
+        self.assertEqual(rows[self.low.id]["percentage"], 80)
+        self.assertEqual(rows[self.zero.id]["percentage"], 0)
+        self.assertEqual(rows[self.zero.id]["alpa"], 5)
+
+    def test_at_least_90_includes_exactly_90_and_100(self):
+        rows = self.rows_for("at_least_90")
+        self.assertEqual(set(rows), {self.boundary.id, self.full.id, self.rounded.id})
+        self.assertEqual(rows[self.boundary.id]["percentage"], 90)
+        self.assertEqual(rows[self.full.id]["percentage"], 100)
+
+    def test_category_uses_reported_percentage_after_rounding(self):
+        # 112/125 is 89.6%, reported as 90%, so it belongs in >= 90%.
+        row = self.rows_for("at_least_90")[self.rounded.id]
+        self.assertEqual((row["hadir"], row["alpa"], row["percentage"]), (112, 13, 90))
+        self.assertNotIn(self.rounded.id, self.rows_for("below_90"))
+
+    def test_rounding_keeps_existing_python_half_to_even_behavior(self):
+        for present, expected in [(177, 88), (179, 90), (181, 90)]:
+            with self.subTest(present=present):
+                student = User.objects.create_user(
+                    email=f"rounding-{present}@percentage.test", name="Rounding", role="siswa", kelas=self.kelas,
+                )
+                self.add_attendance(student, self.subject, present, 200)
+                category = "below_90" if expected < 90 else "at_least_90"
+                self.assertEqual(self.rows_for(category)[student.id]["percentage"], expected)
+
+    def test_category_is_applied_after_subject_filter(self):
+        self.assertIn(self.low.id, self.rows_for("below_90"))
+        self.params["mapelId"] = self.other_subject.id
+        self.assertEqual(set(self.rows_for("at_least_90")), {self.low.id})
+        self.assertEqual(set(self.rows_for("below_90")), {self.full.id})
+
+    def test_subject_without_attendance_only_matches_all(self):
+        self.params["mapelId"] = self.empty_subject.id
+        self.assertEqual(len(self.rows_for("all")), 6)
+        self.assertEqual(self.rows_for("below_90"), {})
+        self.assertEqual(self.rows_for("at_least_90"), {})
+
+    def test_unknown_category_returns_standard_bad_request(self):
+        for category in ["under90", "90", "ALL", " below_90", "none"]:
+            with self.subTest(category=category):
+                response = self.client.get(self.url, {**self.params, "attendanceStatus": category})
+                self.assertEqual(response.status_code, 400)
+                self.assertFalse(response.data["success"])
+                self.assertIn("attendanceStatus", response.data["errors"])
+
+    def test_category_preserves_teacher_scope_and_access_restrictions(self):
+        self.params.pop("kelasId")
+        self.client.force_authenticate(self.teacher)
+        self.assertEqual(set(self.rows_for("below_90")), {self.low.id, self.zero.id})
+        self.params["kelasId"] = self.other_class.id
+        self.assertEqual(self.rows_for("below_90"), {})
+        self.client.force_authenticate(None)
+        self.assertEqual(self.client.get(self.url, {**self.params, "attendanceStatus": "below_90"}).status_code, 401)
+        self.client.force_authenticate(self.low)
+        self.assertEqual(self.client.get(self.url, {**self.params, "attendanceStatus": "below_90"}).status_code, 403)

@@ -34,6 +34,7 @@ class AttendanceReportView(APIView):
             )
         kelas_id = request.query_params.get("kelasId")
         mapel_id = query.validated_data.get("mapelId")
+        attendance_status = query.validated_data["attendanceStatus"]
         
         students = User.objects.filter(role="siswa").select_related("kelas")
         if request.user.role == "guru" and not is_duty_teacher(request.user):
@@ -65,6 +66,11 @@ class AttendanceReportView(APIView):
             
             total = hadir + sakit + izin + alpa
             percentage = int(round((hadir / total) * 100)) if total > 0 else 0
+
+            if attendance_status == "below_90" and (total == 0 or percentage >= 90):
+                continue
+            if attendance_status == "at_least_90" and (total == 0 or percentage < 90):
+                continue
             
             reports.append({
                 "siswaId": student.id,
