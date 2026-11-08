@@ -1,22 +1,23 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { learningService } from "@/services/learningService";
 import type { StudentGradeSummary } from "@/types/report";
 import {
   DataTable,
+  FilterBar,
   SummaryMetricCard,
   LoadingState,
   ErrorState,
+  type ColumnDef,
 } from "@/components/shared";
 import { Award, Clock, CheckSquare } from "lucide-react";
-
-interface GradeRow {
-  tugasId: string;
-  tugasTitle: string;
-  mapelName: string;
-  score?: number;
-  feedback?: string;
-}
+import {
+  searchGrades,
+  filterGradesByStatus,
+  sortGrades,
+  type GradeRow,
+  type GradeSortOrder,
+} from "@/utils/gradeFilters";
 
 import { getSiswaKelasId } from "@/utils/student";
 
@@ -26,6 +27,19 @@ export const GradesPage: React.FC = () => {
     useState<StudentGradeSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sortBy, setSortBy] = useState<string>("score");
+  const [sortOrder, setSortOrder] = useState<GradeSortOrder>("desc");
+
+  const handleSortChange = (key: string) => {
+    if (key === sortBy) {
+      setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(key);
+      setSortOrder("desc");
+    }
+  };
 
   const fetchGrades = useCallback(async () => {
     if (!user) return;
@@ -33,50 +47,62 @@ export const GradesPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [allTugas, allSubs] = await Promise.all([
-        learningService.getTugas(),
-        learningService.getSubmissions(),
-      ]);
-
-      const classId = getSiswaKelasId(user);
-      const published = allTugas.filter(
-        (t) =>
-          t.status === "Dipublikasikan" &&
-          String(t.kelasId) === String(classId),
-      );
-      const mySubs = allSubs.filter((s) => s.siswaId === user.id);
-
-      const grades: GradeRow[] = published.map((t) => {
-        const sub = mySubs.find((s) => s.tugasId === t.id);
-        return {
-          tugasId: String(t.id),
-          tugasTitle: t.title,
-          mapelName: t.mapelName,
-          score: sub?.grade,
-          feedback: sub?.feedback,
-        };
-      });
-
-      const gradedGrades = grades.filter((g) => g.score !== undefined);
-      const totalScore = gradedGrades.reduce(
-        (sum, g) => sum + (g.score || 0),
-        0,
-      );
-      const average =
-        gradedGrades.length > 0
-          ? Math.round(totalScore / gradedGrades.length)
-          : 0;
-
+      const res = await learningService.getMyGrades();
       setStudentReport({
         siswaId: user.id,
         siswaName: user.name || "",
         nis: user.nipOrNis || "",
         kelasName: user.kelasName || "",
-        grades,
-        average,
+        grades: res.grades,
+        average: res.summary.average,
       });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal memuat data nilai.");
+    } catch {
+      try {
+        const [allTugas, allSubs] = await Promise.all([
+          learningService.getTugas(),
+          learningService.getSubmissions(),
+        ]);
+
+        const classId = getSiswaKelasId(user);
+        const published = allTugas.filter(
+          (t) =>
+            t.status === "Dipublikasikan" &&
+            String(t.kelasId) === String(classId),
+        );
+        const mySubs = allSubs.filter((s) => s.siswaId === user.id);
+
+        const grades: GradeRow[] = published.map((t) => {
+          const sub = mySubs.find((s) => s.tugasId === t.id);
+          return {
+            tugasId: String(t.id),
+            tugasTitle: t.title,
+            mapelName: t.mapelName,
+            score: sub?.grade,
+            feedback: sub?.feedback,
+          };
+        });
+
+        const gradedGrades = grades.filter((g) => g.score !== undefined);
+        const totalScore = gradedGrades.reduce(
+          (sum, g) => sum + (g.score || 0),
+          0,
+        );
+        const average =
+          gradedGrades.length > 0
+            ? Math.round(totalScore / gradedGrades.length)
+            : 0;
+
+        setStudentReport({
+          siswaId: user.id,
+          siswaName: user.name || "",
+          nis: user.nipOrNis || "",
+          kelasName: user.kelasName || "",
+          grades,
+          average,
+        });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Gagal memuat data nilai.");
+      }
     } finally {
       setLoading(false);
     }
@@ -86,7 +112,7 @@ export const GradesPage: React.FC = () => {
     void Promise.resolve().then(fetchGrades);
   }, [fetchGrades]);
 
-  const columns = [
+  const columns: ColumnDef<GradeRow>[] = [
     {
       header: "Mata Pelajaran",
       cell: (g: GradeRow) => (
@@ -105,8 +131,9 @@ export const GradesPage: React.FC = () => {
     },
     {
       header: "Perolehan Nilai",
+      sortKey: "score",
       cell: (g: GradeRow) =>
-        g.score !== undefined ? (
+        typeof g.score === "number" ? (
           <span className="text-[14px] font-bold font-mono text-primary flex items-center gap-1">
             <Award className="h-4 w-4" />
             {g.score}
@@ -130,6 +157,19 @@ export const GradesPage: React.FC = () => {
     },
   ];
 
+  const grades = studentReport ? studentReport.grades : [];
+  const average = studentReport?.average ?? 0;
+  const totalTugas = grades.length;
+  const gradedTugas = grades.filter((g) => typeof g.score === "number").length;
+  const pendingTugas = totalTugas - gradedTugas;
+
+  const filteredGrades = useMemo(() => {
+    let result = searchGrades(grades, search);
+    result = filterGradesByStatus(result, statusFilter);
+    result = sortGrades(result, sortBy, sortOrder);
+    return result;
+  }, [grades, search, statusFilter, sortBy, sortOrder]);
+
   if (loading) {
     return <LoadingState message="Memuat data nilai Anda..." />;
   }
@@ -137,12 +177,6 @@ export const GradesPage: React.FC = () => {
   if (error) {
     return <ErrorState message={error} onRetry={fetchGrades} />;
   }
-
-  const average = studentReport?.average ?? 0;
-  const grades = studentReport ? studentReport.grades : [];
-  const totalTugas = grades.length;
-  const gradedTugas = grades.filter((g) => g.score !== undefined).length;
-  const pendingTugas = totalTugas - gradedTugas;
 
   return (
     <div className="space-y-6">
@@ -185,14 +219,38 @@ export const GradesPage: React.FC = () => {
         />
       </div>
 
+      {/* Search & Filter Bar */}
+      <FilterBar
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Cari tugas atau mata pelajaran..."
+        searchLabel="Pencarian Evaluasi"
+        filterValue={statusFilter}
+        onFilterChange={setStatusFilter}
+        filterLabel="Status Penilaian"
+        filterPlaceholder="Semua Status"
+        filterOptions={[
+          { value: "all", label: "Semua Status" },
+          { value: "graded", label: "Sudah Dinilai" },
+          { value: "pending", label: "Menunggu Penilaian" },
+        ]}
+      />
+
       {/* Main Table */}
       <DataTable
         title="Daftar Rincian Nilai Tugas Akademik Anda"
         columns={columns}
-        data={grades}
+        data={filteredGrades}
         keyExtractor={(g) => g.tugasId}
+        sortBy={sortBy}
+        sortOrder={sortOrder}
+        onSortChange={handleSortChange}
         emptyStateTitle="Tidak ada nilai"
-        emptyStateDescription="Belum ada data nilai tugas mandiri yang terbit untuk kelas Anda."
+        emptyStateDescription={
+          search.trim() || statusFilter !== "all"
+            ? "Tidak ada nilai tugas yang cocok dengan filter atau kata kunci pencarian Anda."
+            : "Belum ada data nilai tugas mandiri yang terbit untuk kelas Anda."
+        }
       />
     </div>
   );

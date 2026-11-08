@@ -352,4 +352,94 @@ export const learningService = {
     localStorage.setItem(STORAGE_KEYS.SUBMISSIONS, JSON.stringify(updatedList));
     return updatedItem;
   },
+
+  // --- STUDENT GRADES ---
+  async getMyGrades(params?: {
+    search?: string;
+    status?: string;
+    sortBy?: string;
+    sortOrder?: "asc" | "desc";
+  }): Promise<{
+    summary: {
+      average: number;
+      totalTugas: number;
+      gradedTugas: number;
+      pendingTugas: number;
+    };
+    grades: {
+      tugasId: string;
+      tugasTitle: string;
+      mapelName: string;
+      score?: number;
+      feedback?: string;
+    }[];
+  }> {
+    if (!IS_TEST) {
+      return apiGet("/learning/my-grades/", params);
+    }
+    await delay();
+    const [allTugas, allSubs] = await Promise.all([
+      this.getTugas(),
+      this.getSubmissions(),
+    ]);
+    const published = allTugas.filter((t) => t.status === "Dipublikasikan");
+    let gradesList = published.map((t) => {
+      const sub = allSubs.find((s) => s.tugasId === t.id);
+      return {
+        tugasId: String(t.id),
+        tugasTitle: t.title,
+        mapelName: t.mapelName,
+        score: sub?.grade,
+        feedback: sub?.feedback,
+      };
+    });
+
+    if (params?.search?.trim()) {
+      const clean = params.search.trim().toLowerCase();
+      gradesList = gradesList.filter(
+        (g) =>
+          g.tugasTitle.toLowerCase().includes(clean) ||
+          g.mapelName.toLowerCase().includes(clean),
+      );
+    }
+
+    if (params?.status === "graded") {
+      gradesList = gradesList.filter((g) => g.score !== undefined);
+    } else if (params?.status === "pending") {
+      gradesList = gradesList.filter((g) => g.score === undefined);
+    }
+
+    const sortBy = params?.sortBy || "score";
+    const isAsc = params?.sortOrder === "asc";
+    if (sortBy === "score") {
+      gradesList.sort((a, b) => {
+        if (a.score === undefined && b.score === undefined) return 0;
+        if (a.score === undefined) return 1;
+        if (b.score === undefined) return -1;
+        return isAsc ? a.score - b.score : b.score - a.score;
+      });
+    } else if (sortBy === "title") {
+      gradesList.sort((a, b) => (isAsc ? a.tugasTitle.localeCompare(b.tugasTitle) : b.tugasTitle.localeCompare(a.tugasTitle)));
+    } else if (sortBy === "mapel") {
+      gradesList.sort((a, b) => (isAsc ? a.mapelName.localeCompare(b.mapelName) : b.mapelName.localeCompare(a.mapelName)));
+    }
+
+    const scored = gradesList.filter((g) => g.score !== undefined);
+    const average =
+      scored.length > 0
+        ? Math.round(
+            scored.reduce((sum, g) => sum + (g.score || 0), 0) / scored.length,
+          )
+        : 0;
+
+    return {
+      summary: {
+        average,
+        totalTugas: gradesList.length,
+        gradedTugas: scored.length,
+        pendingTugas: gradesList.length - scored.length,
+      },
+      grades: gradesList,
+    };
+  },
 };

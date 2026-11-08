@@ -10,9 +10,16 @@ from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.permissions import BasePermission, SAFE_METHODS, IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
+from django.db.models import Q
+from django.contrib.auth import get_user_model
 
 from learning.models import Materi, Tugas, Submission
-from learning.serializers import MateriSerializer, TugasSerializer, SubmissionSerializer
+from learning.serializers import (
+    MateriSerializer,
+    TugasSerializer,
+    SubmissionSerializer,
+    StudentGradesQuerySerializer,
+)
 from shared.access import can_teach_subject
 from shared.responses import StandardResponse
 from config.throttling import RuntimeScopedRateThrottle
@@ -502,3 +509,144 @@ class FileUploadView(APIView):
             data={"fileUrl": absolute_url},
             message="Berkas berhasil diunggah."
         )
+
+
+class StudentGradesView(APIView):
+    """API View to retrieve and search personal student grades with aggregated metrics."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        query = StudentGradesQuerySerializer(data=request.query_params)
+        if not query.is_valid():
+            return StandardResponse.error(
+                message="Parameter filter nilai tidak valid.",
+                errors=query.errors,
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+
+        User = get_user_model()
+        target_user = request.user
+        siswa_id = request.query_params.get("siswaId")
+
+        if request.user.role in ["admin", "guru"] and siswa_id:
+            target_user = User.objects.filter(id=siswa_id, role="siswa").first()
+            if not target_user:
+                return StandardResponse.error(
+                    message="Siswa tidak ditemukan.",
+                    status_code=status.HTTP_404_NOT_FOUND,
+                )
+        elif request.user.role != "siswa":
+            return StandardResponse.error(
+                message="Hanya akun siswa atau query guru/admin dengan siswaId yang diizinkan.",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
+        if not target_user.kelas:
+            return StandardResponse.success(
+                data={
+                    "summary": {
+                        "average": 0,
+                        "totalTugas": 0,
+                        "gradedTugas": 0,
+                        "pendingTugas": 0,
+                    },
+                    "grades": [],
+                }
+            )
+
+        search_term = query.validated_data.get("search", "")
+        status_filter = query.validated_data.get("status", "all")
+
+        # Get published assignments for the student's class
+        tugas_qs = (
+            Tugas.objects.filter(
+                kelas=target_user.kelas,
+                status="Dipublikasikan",
+            )
+            .select_related("mapel", "kelas")
+            .order_by("due_date", "-id")
+        )
+
+        if search_term:
+            tugas_qs = tugas_qs.filter(
+                Q(title__icontains=search_term)
+                | Q(mapel__name__icontains=search_term)
+            )
+
+        submissions = {
+            sub.tugas_id: sub
+            for sub in Submission.objects.filter(
+                siswa=target_user,
+                tugas__in=tugas_qs,
+            )
+        }
+
+        grades_list = []
+        scored_list = []
+
+        for tugas in tugas_qs:
+            sub = submissions.get(tugas.id)
+            score = sub.grade if sub else None
+            feedback = sub.feedback if sub else None
+            if score is not None:
+                scored_list.append(score)
+
+            grades_list.append(
+                {
+                    "tugasId": str(tugas.id),
+                    "tugasTitle": tugas.title,
+                    "mapelName": tugas.mapel.name,
+                    "score": score,
+                    "feedback": feedback,
+                }
+            )
+
+        total_tugas = len(grades_list)
+        graded_tugas = len(scored_list)
+        pending_tugas = total_tugas - graded_tugas
+        average = (
+            int(round(sum(scored_list) / len(scored_list)))
+            if scored_list
+            else 0
+        )
+
+        if status_filter == "graded":
+            grades_list = [g for g in grades_list if g["score"] is not None]
+        elif status_filter == "pending":
+            grades_list = [g for g in grades_list if g["score"] is None]
+
+        sort_by = query.validated_data.get("sortBy", "score")
+        sort_order = query.validated_data.get("sortOrder", "desc")
+        descending = sort_order == "desc"
+
+        if sort_by == "score":
+            grades_list.sort(
+                key=lambda x: (
+                    x["score"] is None,
+                    -x["score"] if descending else (x["score"] if x["score"] is not None else 0),
+                    x["tugasTitle"].lower(),
+                )
+            )
+        elif sort_by == "title":
+            grades_list.sort(
+                key=lambda x: (x["tugasTitle"].lower(), str(x["tugasId"])),
+                reverse=descending,
+            )
+        elif sort_by == "mapel":
+            grades_list.sort(
+                key=lambda x: (x["mapelName"].lower(), x["tugasTitle"].lower()),
+                reverse=descending,
+            )
+
+        return StandardResponse.success(
+            data={
+                "summary": {
+                    "average": average,
+                    "totalTugas": total_tugas,
+                    "gradedTugas": graded_tugas,
+                    "pendingTugas": pending_tugas,
+                },
+                "grades": grades_list,
+            }
+        )
+

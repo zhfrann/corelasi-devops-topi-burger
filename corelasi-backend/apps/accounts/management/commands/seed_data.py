@@ -308,36 +308,139 @@ class Command(BaseCommand):
             guru=guru_math,
             status="Dipublikasikan"
         )
-        
-        # Task
-        tugas = Tugas.objects.create(
-            title="Latihan Soal SPLDV",
-            description="Kerjakan soal nomor 1-10 di buku cetak halaman 48. Foto jawaban dan kumpulkan di sini.",
-            file_url="https://drive.google.com/file/d/demosplit",
-            due_date=today + datetime.timedelta(days=3),
-            kelas=kelas_x_a,
-            mapel=mapel_mat,
-            guru=guru_math,
-            status="Dipublikasikan"
-        )
-        
-        # Submission
-        Submission.objects.create(
-            tugas=tugas,
-            siswa=siswa_1,
-            submit_date=today,
-            file_url="https://drive.google.com/file/d/siswa1-jawaban",
-            status="Terkumpul",
-            grade=85,
-            feedback="Pekerjaan rapi, langkah eliminasi tepat."
-        )
-        
-        Submission.objects.create(
-            tugas=tugas,
-            siswa=siswa_2,
-            submit_date=today,
-            file_url="https://drive.google.com/file/d/siswa2-jawaban",
-            status="Terkumpul",
-            grade=None, # Not graded yet
-            feedback=""
-        )
+
+        # Tasks & Submissions for Kelas X-A (Rian Adi Wijaya)
+        tasks_data = [
+            {
+                "title": "Latihan Soal SPLDV",
+                "desc": "Kerjakan soal nomor 1-10 di buku cetak halaman 48. Foto jawaban dan kumpulkan di sini.",
+                "mapel": mapel_mat,
+                "guru": guru_math,
+                "due": today + datetime.timedelta(days=3),
+                "score": 85,
+                "feedback": "Pekerjaan rapi, langkah eliminasi tepat.",
+                "submitted": True,
+            },
+            {
+                "title": "Praktikum Hukum Newton II",
+                "desc": "Laporan pengamatan percepatan benda menggunakan ticker timer.",
+                "mapel": mapel_fis,
+                "guru": guru_science,
+                "due": today - datetime.timedelta(days=5),
+                "score": 92,
+                "feedback": "Analisis grafik percepatan sangat mendalam dan akurat.",
+                "submitted": True,
+            },
+            {
+                "title": "Analisis Struktur Teks Anekdot",
+                "desc": "Identifikasi struktur orientasi, krisis, reaksi, dan koda pada teks terlampir.",
+                "mapel": mapel_ind,
+                "guru": guru_piket,
+                "due": today - datetime.timedelta(days=2),
+                "score": 78,
+                "feedback": "Perhatikan kaidah kebahasaan dan konjungsi temporal.",
+                "submitted": True,
+            },
+            {
+                "title": "Writing Descriptive Essay: My School",
+                "desc": "Write a 300-word descriptive essay about the school environment using sensory details.",
+                "mapel": mapel_ing,
+                "guru": guru_piket,
+                "due": today - datetime.timedelta(days=8),
+                "score": 95,
+                "feedback": "Excellent vocabulary and grammatical structure!",
+                "submitted": True,
+            },
+            {
+                "title": "Uji Pemahaman Fungsi Kuadrat",
+                "desc": "Menentukan titik potong sumbu koordinat dan nilai optimum fungsi kuadrat.",
+                "mapel": mapel_mat,
+                "guru": guru_math,
+                "due": today - datetime.timedelta(days=12),
+                "score": 70,
+                "feedback": "Perlu latihan lagi pada penentuan titik puncak parabola.",
+                "submitted": True,
+            },
+            {
+                "title": "Laporan Praktikum Termodinamika",
+                "desc": "Kaji siklus Carnot dan hitung efisiensi kalor pada sistem tertutup.",
+                "mapel": mapel_fis,
+                "guru": guru_science,
+                "due": today - datetime.timedelta(days=4),
+                "score": 88,
+                "feedback": "Perhitungan efisiensi mesin Carnot sudah benar.",
+                "submitted": True,
+            },
+            {
+                "title": "Resensi Novel Sastra Indonesia",
+                "desc": "Buat ulasan novel Bumi Manusia meliputi sinopsis, kelebihan, dan kelemahan.",
+                "mapel": mapel_ind,
+                "guru": guru_piket,
+                "due": today + datetime.timedelta(days=5),
+                "score": None,
+                "feedback": None,
+                "submitted": True,
+            },
+            {
+                "title": "Reading Comprehension & TOEFL Drill",
+                "desc": "Kerjakan latihan soal reading passage dan vocabulary in context section 1-3.",
+                "mapel": mapel_ing,
+                "guru": guru_piket,
+                "due": today - datetime.timedelta(days=6),
+                "score": 82,
+                "feedback": "Good effort, pertahankan konsistensi latihan reading.",
+                "submitted": True,
+            },
+            {
+                "title": "Proyek Trigonometri & Pengukuran Tinggi",
+                "desc": "Gunakan klinometer sederhana untuk mengukur tinggi tiang bendera sekolah.",
+                "mapel": mapel_mat,
+                "guru": guru_math,
+                "due": today - datetime.timedelta(days=15),
+                "score": 96,
+                "feedback": "Presentasi dan hasil perhitungannya luar biasa kreatif!",
+                "submitted": True,
+            },
+            {
+                "title": "Tugas Mandiri Gelombang Bunyi & Cahaya",
+                "desc": "Selesaikan 10 soal perhitungan efek Doppler dan difraksi kisi.",
+                "mapel": mapel_fis,
+                "guru": guru_science,
+                "due": today + datetime.timedelta(days=2),
+                "score": None,
+                "feedback": None,
+                "submitted": True,
+            },
+            {
+                "title": "Pidato Persuasif Tema Lingkungan Hidup",
+                "desc": "Tulis naskah pidato persuasif sepanjang 2 halaman folio dengan topik pengelolaan sampah plastik.",
+                "mapel": mapel_ind,
+                "guru": guru_piket,
+                "due": today + datetime.timedelta(days=7),
+                "score": None,
+                "feedback": None,
+                "submitted": False,
+            },
+        ]
+
+        for item in tasks_data:
+            t_obj = Tugas.objects.create(
+                title=item["title"],
+                description=item["desc"],
+                file_url="https://drive.google.com/file/d/demotask",
+                due_date=item["due"],
+                kelas=kelas_x_a,
+                mapel=item["mapel"],
+                guru=item["guru"],
+                status="Dipublikasikan"
+            )
+            if item["submitted"]:
+                Submission.objects.create(
+                    tugas=t_obj,
+                    siswa=siswa_1,
+                    submit_date=today - datetime.timedelta(days=1),
+                    file_url="https://drive.google.com/file/d/siswa1-jawaban",
+                    status="Terkumpul",
+                    grade=item["score"],
+                    feedback=item["feedback"] or "",
+                )
