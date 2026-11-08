@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { reportService } from "@/services/reportService";
 import { academicService } from "@/services/academicService";
 import type { Kelas, MataPelajaran } from "@/types/academic";
-import type { StudentAttendanceSummary } from "@/types/report";
+import type { AttendanceStatus, StudentAttendanceSummary } from "@/types/report";
 import {
   DataTable,
   Button,
@@ -16,6 +16,7 @@ import {
 import type { SemanticState } from "@/utils/semanticState";
 import { Download } from "lucide-react";
 import { exportToExcel } from "@/utils/exportHelper";
+import { getAttendancePercentageLabel, hasAttendanceData } from "@/utils/attendanceReport";
 
 export const AttendanceReportsPage: React.FC = () => {
   const [reports, setReports] = useState<StudentAttendanceSummary[]>([]);
@@ -26,6 +27,7 @@ export const AttendanceReportsPage: React.FC = () => {
   const [search, setSearch] = useState("");
   const [selectedClass, setSelectedClass] = useState("");
   const [selectedMapel, setSelectedMapel] = useState("");
+  const [attendanceStatus, setAttendanceStatus] = useState<AttendanceStatus>("all");
   const [classes, setClasses] = useState<Kelas[]>([]);
   const [subjects, setSubjects] = useState<MataPelajaran[]>([]);
   const [retry, setRetry] = useState(0);
@@ -34,7 +36,7 @@ export const AttendanceReportsPage: React.FC = () => {
 
   useEffect(() => {
     let active = true;
-    const filtersKey = JSON.stringify([selectedClass, selectedMapel, retry]);
+    const filtersKey = JSON.stringify([selectedClass, selectedMapel, attendanceStatus, retry]);
     const loadReports = async () => {
       setLoading(true);
       setError(null);
@@ -42,6 +44,7 @@ export const AttendanceReportsPage: React.FC = () => {
         const [data, kelas, mapel] = await Promise.all([
           reportService.getAttendanceReports(selectedClass || undefined, {
             mapelId: selectedMapel || undefined,
+            attendanceStatus,
           }),
           academicService.getKelas(),
           academicService.getMapel(),
@@ -64,9 +67,9 @@ export const AttendanceReportsPage: React.FC = () => {
     };
     void loadReports();
     return () => { active = false; };
-  }, [selectedClass, selectedMapel, retry]);
+  }, [selectedClass, selectedMapel, attendanceStatus, retry]);
 
-  const pending = loading || loadedFilters !== JSON.stringify([selectedClass, selectedMapel, retry]);
+  const pending = loading || loadedFilters !== JSON.stringify([selectedClass, selectedMapel, attendanceStatus, retry]);
 
   const filteredReports = useMemo(() => {
     let result = [...reports];
@@ -95,7 +98,7 @@ export const AttendanceReportsPage: React.FC = () => {
       Sakit: r.sakit,
       Izin: r.izin,
       Alpa: r.alpa,
-      "Persentase Kehadiran (%)": `${r.percentage}%`,
+      "Persentase Kehadiran (%)": getAttendancePercentageLabel(r),
     }));
     exportToExcel(
       exportData,
@@ -161,6 +164,9 @@ export const AttendanceReportsPage: React.FC = () => {
     {
       header: "Persentase Kehadiran",
       cell: (r: StudentAttendanceSummary) => {
+        if (!hasAttendanceData(r)) {
+          return <StatusBadge label={getAttendancePercentageLabel(r)} state="neutral" size="xs" />;
+        }
         let state: SemanticState = "safe";
         if (r.percentage < 90) {
           state = "danger";
@@ -169,7 +175,7 @@ export const AttendanceReportsPage: React.FC = () => {
         }
 
         return (
-          <StatusBadge label={`${r.percentage}%`} state={state} size="xs" />
+          <StatusBadge label={getAttendancePercentageLabel(r)} state={state} size="xs" />
         );
       },
     },
@@ -221,21 +227,38 @@ export const AttendanceReportsPage: React.FC = () => {
         filterLabel="Kelas"
         filterOptions={classOptions}
         actions={
-          <div className="flex flex-col gap-1.5 min-w-[150px]">
-            <label htmlFor="attendance-report-mapel" className="text-[13px] font-semibold text-bg-ink-secondary">
-              Mata Pelajaran
-            </label>
-            <Select
-              id="attendance-report-mapel"
-              value={selectedMapel}
-              onChange={(event) => setSelectedMapel(event.target.value)}
-              className="h-9 py-1 pl-3.5 pr-10 text-[13px]"
-            >
-              <option value="">Semua Mapel</option>
-              {subjects.map((subject) => (
-                <option key={subject.id} value={String(subject.id)}>{subject.name}</option>
-              ))}
-            </Select>
+          <div className="grid gap-3 lg:grid-cols-2">
+            <div className="flex flex-col gap-1.5 min-w-[150px]">
+              <label htmlFor="attendance-report-mapel" className="text-[13px] font-semibold text-bg-ink-secondary">
+                Mata Pelajaran
+              </label>
+              <Select
+                id="attendance-report-mapel"
+                value={selectedMapel}
+                onChange={(event) => setSelectedMapel(event.target.value)}
+                className="h-9 py-1 pl-3.5 pr-10 text-[13px]"
+              >
+                <option value="">Semua Mapel</option>
+                {subjects.map((subject) => (
+                  <option key={subject.id} value={String(subject.id)}>{subject.name}</option>
+                ))}
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5 min-w-[150px]">
+              <label htmlFor="attendance-report-status" className="text-[13px] font-semibold text-bg-ink-secondary">
+                Kehadiran
+              </label>
+              <Select
+                id="attendance-report-status"
+                value={attendanceStatus}
+                onChange={(event) => setAttendanceStatus(event.target.value as AttendanceStatus)}
+                className="h-9 py-1 pl-3.5 pr-10 text-[13px]"
+              >
+                <option value="all">Semua siswa</option>
+                <option value="below_90">Kehadiran &lt; 90%</option>
+                <option value="at_least_90">Kehadiran ≥ 90%</option>
+              </Select>
+            </div>
           </div>
         }
       />
