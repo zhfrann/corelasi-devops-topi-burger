@@ -10,9 +10,15 @@ from journals.models import JurnalPertemuan
 from shared.responses import StandardResponse
 from shared.access import is_duty_teacher, teacher_class_ids
 from reports.serializers import AttendanceReportQuerySerializer
-
+from django.urls import path
+from .views import AttendanceReportView, GradeReportView, OperationalReportView
 User = get_user_model()
 
+urlpatterns = [
+    path('attendance/', AttendanceReportView.as_view(), name='attendance-report'),
+    path('grades/', GradeReportView.as_view(), name='grade-report'),
+    path('operational/', OperationalReportView.as_view(), name='operational-report'),
+]
 class IsAdminOrGuru(IsAuthenticated):
     """Permission class to restrict report access to Admin and Guru roles."""
     def has_permission(self, request, view):
