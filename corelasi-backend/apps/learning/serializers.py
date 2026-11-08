@@ -74,10 +74,28 @@ class StudentGradesQuerySerializer(serializers.Serializer):
         default="all",
         allow_blank=True,
     )
+    sortBy = serializers.ChoiceField(
+        choices=("score", "title", "mapel"),
+        required=False,
+        default="score",
+        allow_blank=True,
+    )
+    sortOrder = serializers.ChoiceField(
+        choices=("asc", "desc"),
+        required=False,
+        default="desc",
+        allow_blank=True,
+    )
 
     def validate_search(self, value):
         return (value or "").strip()
 
     def validate_status(self, value):
         return value or "all"
+
+    def validate_sortBy(self, value):
+        return value or "score"
+
+    def validate_sortOrder(self, value):
+        return value or "desc"
 

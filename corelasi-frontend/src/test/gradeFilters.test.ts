@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   searchGrades,
   filterGradesByStatus,
+  sortGrades,
+  filterAndSortGrades,
   type GradeRow,
 } from "../utils/gradeFilters";
 
@@ -85,6 +87,59 @@ describe("Grade Filters Utility Tests (Fadhli)", () => {
       expect(result).toHaveLength(1);
       expect(result[0].tugasId).toBe("tug-3");
       expect(result[0].score).toBeUndefined();
+    });
+
+    it("harus memperlakukan score bernilai null maupun undefined sebagai pending", () => {
+      const dataWithNull: GradeRow[] = [
+        { tugasId: "1", tugasTitle: "A", mapelName: "M", score: 80 },
+        { tugasId: "2", tugasTitle: "B", mapelName: "M", score: null as unknown as number },
+        { tugasId: "3", tugasTitle: "C", mapelName: "M", score: undefined },
+      ];
+      expect(filterGradesByStatus(dataWithNull, "graded")).toHaveLength(1);
+      expect(filterGradesByStatus(dataWithNull, "pending")).toHaveLength(2);
+    });
+  });
+
+  describe("sortGrades", () => {
+    it("harus mengurutkan skor secara descending dengan nilai null/undefined selalu di akhir", () => {
+      const result = sortGrades(mockGrades, "score", "desc");
+      const scores = result.map((r) => r.score);
+      expect(scores).toEqual([92, 88, 75, undefined]);
+      expect(result[result.length - 1].tugasId).toBe("tug-3");
+    });
+
+    it("harus mengurutkan skor secara ascending dengan nilai null/undefined tetap di posisi paling akhir", () => {
+      const result = sortGrades(mockGrades, "score", "asc");
+      const scores = result.map((r) => r.score);
+      expect(scores).toEqual([75, 88, 92, undefined]);
+      expect(result[result.length - 1].tugasId).toBe("tug-3");
+    });
+
+    it("harus mengurutkan berdasarkan nama mata pelajaran", () => {
+      const result = sortGrades(mockGrades, "mapel", "asc");
+      const mapels = result.map((r) => r.mapelName);
+      expect(mapels[0]).toBe("Bahasa Indonesia");
+      expect(mapels[mapels.length - 1]).toBe("Matematika");
+    });
+
+    it("harus mengurutkan berdasarkan nama tugas", () => {
+      const result = sortGrades(mockGrades, "title", "asc");
+      expect(result[0].tugasTitle).toBe("Analisis Struktur Teks Eksposisi");
+    });
+  });
+
+  describe("filterAndSortGrades (composite pipeline)", () => {
+    it("harus menggabungkan search, filter status, dan sort dengan konsisten", () => {
+      const result = filterAndSortGrades(mockGrades, {
+        searchQuery: "fisika",
+        status: "graded",
+        sortBy: "score",
+        sortOrder: "desc",
+      });
+
+      expect(result).toHaveLength(2);
+      expect(result[0].tugasId).toBe("tug-4"); // Score 92
+      expect(result[1].tugasId).toBe("tug-2"); // Score 75
     });
   });
 });

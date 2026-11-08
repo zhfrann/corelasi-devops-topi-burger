@@ -698,4 +698,116 @@ class LearningAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(response.data["success"])
 
+    def test_student_can_sort_grades_by_score_descending(self):
+        t1 = Tugas.objects.create(
+            title="Tugas Skor Rendah",
+            description="Deskripsi",
+            due_date=datetime.date.today() + datetime.timedelta(days=1),
+            kelas=self.kelas_a,
+            mapel=self.mapel,
+            guru=self.teacher,
+            status="Dipublikasikan",
+        )
+        t2 = Tugas.objects.create(
+            title="Tugas Skor Tinggi",
+            description="Deskripsi",
+            due_date=datetime.date.today() + datetime.timedelta(days=2),
+            kelas=self.kelas_a,
+            mapel=self.mapel,
+            guru=self.teacher,
+            status="Dipublikasikan",
+        )
+        Tugas.objects.create(
+            title="Tugas Tanpa Skor",
+            description="Deskripsi",
+            due_date=datetime.date.today() + datetime.timedelta(days=3),
+            kelas=self.kelas_a,
+            mapel=self.mapel,
+            guru=self.teacher,
+            status="Dipublikasikan",
+        )
+        Submission.objects.create(
+            tugas=t1,
+            siswa=self.siswa,
+            status="Terkumpul",
+            grade=70,
+        )
+        Submission.objects.create(
+            tugas=t2,
+            siswa=self.siswa,
+            status="Terkumpul",
+            grade=95,
+        )
+
+        self.client.force_authenticate(user=self.siswa)
+        response = self.client.get(
+            self.my_grades_url, {"sortBy": "score", "sortOrder": "desc"}
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        grades = response.data["data"]["grades"]
+        self.assertEqual(len(grades), 3)
+        self.assertEqual(grades[0]["score"], 95)
+        self.assertEqual(grades[1]["score"], 70)
+        self.assertIsNone(grades[2]["score"])
+
+    def test_student_can_sort_grades_by_score_ascending_with_nulls_last(self):
+        t1 = Tugas.objects.create(
+            title="Tugas 70",
+            description="Deskripsi",
+            due_date=datetime.date.today() + datetime.timedelta(days=1),
+            kelas=self.kelas_a,
+            mapel=self.mapel,
+            guru=self.teacher,
+            status="Dipublikasikan",
+        )
+        t2 = Tugas.objects.create(
+            title="Tugas 95",
+            description="Deskripsi",
+            due_date=datetime.date.today() + datetime.timedelta(days=2),
+            kelas=self.kelas_a,
+            mapel=self.mapel,
+            guru=self.teacher,
+            status="Dipublikasikan",
+        )
+        Tugas.objects.create(
+            title="Tugas Belum Dinilai Null",
+            description="Deskripsi",
+            due_date=datetime.date.today() + datetime.timedelta(days=3),
+            kelas=self.kelas_a,
+            mapel=self.mapel,
+            guru=self.teacher,
+            status="Dipublikasikan",
+        )
+        Submission.objects.create(
+            tugas=t1,
+            siswa=self.siswa,
+            status="Terkumpul",
+            grade=70,
+        )
+        Submission.objects.create(
+            tugas=t2,
+            siswa=self.siswa,
+            status="Terkumpul",
+            grade=95,
+        )
+
+        self.client.force_authenticate(user=self.siswa)
+        response = self.client.get(
+            self.my_grades_url, {"sortBy": "score", "sortOrder": "asc"}
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        grades = response.data["data"]["grades"]
+        self.assertEqual(len(grades), 3)
+        self.assertEqual(grades[0]["score"], 70)
+        self.assertEqual(grades[1]["score"], 95)
+        # nulls-last: unrated task is at the end
+        self.assertIsNone(grades[2]["score"])
+
+    def test_student_sort_invalid_sortby_returns_400(self):
+        self.client.force_authenticate(user=self.siswa)
+        response = self.client.get(self.my_grades_url, {"sortBy": "invalid_field"})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(response.data["success"])
+
+
 

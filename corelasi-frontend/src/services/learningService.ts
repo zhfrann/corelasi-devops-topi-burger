@@ -354,7 +354,12 @@ export const learningService = {
   },
 
   // --- STUDENT GRADES ---
-  async getMyGrades(params?: { search?: string; status?: string }): Promise<{
+  async getMyGrades(params?: {
+    search?: string;
+    status?: string;
+    sortBy?: string;
+    sortOrder?: "asc" | "desc";
+  }): Promise<{
     summary: {
       average: number;
       totalTugas: number;
@@ -402,6 +407,21 @@ export const learningService = {
       gradesList = gradesList.filter((g) => g.score !== undefined);
     } else if (params?.status === "pending") {
       gradesList = gradesList.filter((g) => g.score === undefined);
+    }
+
+    const sortBy = params?.sortBy || "score";
+    const isAsc = params?.sortOrder === "asc";
+    if (sortBy === "score") {
+      gradesList.sort((a, b) => {
+        if (a.score === undefined && b.score === undefined) return 0;
+        if (a.score === undefined) return 1;
+        if (b.score === undefined) return -1;
+        return isAsc ? a.score - b.score : b.score - a.score;
+      });
+    } else if (sortBy === "title") {
+      gradesList.sort((a, b) => (isAsc ? a.tugasTitle.localeCompare(b.tugasTitle) : b.tugasTitle.localeCompare(a.tugasTitle)));
+    } else if (sortBy === "mapel") {
+      gradesList.sort((a, b) => (isAsc ? a.mapelName.localeCompare(b.mapelName) : b.mapelName.localeCompare(a.mapelName)));
     }
 
     const scored = gradesList.filter((g) => g.score !== undefined);

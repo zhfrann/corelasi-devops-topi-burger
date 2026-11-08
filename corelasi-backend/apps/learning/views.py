@@ -615,6 +615,29 @@ class StudentGradesView(APIView):
         elif status_filter == "pending":
             grades_list = [g for g in grades_list if g["score"] is None]
 
+        sort_by = query.validated_data.get("sortBy", "score")
+        sort_order = query.validated_data.get("sortOrder", "desc")
+        descending = sort_order == "desc"
+
+        if sort_by == "score":
+            grades_list.sort(
+                key=lambda x: (
+                    x["score"] is None,
+                    -x["score"] if descending else (x["score"] if x["score"] is not None else 0),
+                    x["tugasTitle"].lower(),
+                )
+            )
+        elif sort_by == "title":
+            grades_list.sort(
+                key=lambda x: (x["tugasTitle"].lower(), str(x["tugasId"])),
+                reverse=descending,
+            )
+        elif sort_by == "mapel":
+            grades_list.sort(
+                key=lambda x: (x["mapelName"].lower(), x["tugasTitle"].lower()),
+                reverse=descending,
+            )
+
         return StandardResponse.success(
             data={
                 "summary": {

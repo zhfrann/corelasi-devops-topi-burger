@@ -27,7 +27,6 @@ CORELASI dibagi menjadi empat area utama:
 | Tech Lead + Fullstack | Hafidz Musyafa Azmi | Root config, integrasi, deploy, release, merge, dokumentasi arsitektur | Boleh lintas modul untuk integrasi dan release. |
 | Backend | Haafizd Alhabib Azwir | `corelasi-backend/apps/accounts`, `academic`, `schedules`, sebagian `config` | Tidak mengubah frontend tanpa koordinasi. |
 | Backend | Gilang Tirta Kesumah | `attendance`, `learning`, `journals`, `reports`, `shared` | Koordinasi kontrak API dengan frontend. |
-| Frontend | Fadhli Muhammad Dzaki | `corelasi-frontend/src`, `public`, frontend tests | Tidak mengubah model/API backend tanpa ticket. |
 | UI/UX | Khansa Aulia Fauzah | Figma, user flow, prototype, design handoff, `docs/uiux` bila perlu | GitHub opsional hanya untuk catatan handoff. |
 | QA | Nashbilla Nurfazza | Jira QA, test scenario, bug report, regression checklist, `docs/qa` | Tidak mengubah source code aplikasi. |
 

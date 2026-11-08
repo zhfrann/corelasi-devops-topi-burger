@@ -8,9 +8,16 @@ import {
   SummaryMetricCard,
   LoadingState,
   ErrorState,
+  type ColumnDef,
 } from "@/components/shared";
 import { Award, Clock, CheckSquare } from "lucide-react";
-import { searchGrades, filterGradesByStatus, type GradeRow } from "@/utils/gradeFilters";
+import {
+  searchGrades,
+  filterGradesByStatus,
+  sortGrades,
+  type GradeRow,
+  type GradeSortOrder,
+} from "@/utils/gradeFilters";
 
 import { getSiswaKelasId } from "@/utils/student";
 
@@ -22,6 +29,17 @@ export const GradesPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [sortBy, setSortBy] = useState<string>("score");
+  const [sortOrder, setSortOrder] = useState<GradeSortOrder>("desc");
+
+  const handleSortChange = (key: string) => {
+    if (key === sortBy) {
+      setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(key);
+      setSortOrder("desc");
+    }
+  };
 
   const fetchGrades = useCallback(async () => {
     if (!user) return;
@@ -94,7 +112,7 @@ export const GradesPage: React.FC = () => {
     void Promise.resolve().then(fetchGrades);
   }, [fetchGrades]);
 
-  const columns = [
+  const columns: ColumnDef<GradeRow>[] = [
     {
       header: "Mata Pelajaran",
       cell: (g: GradeRow) => (
@@ -113,8 +131,9 @@ export const GradesPage: React.FC = () => {
     },
     {
       header: "Perolehan Nilai",
+      sortKey: "score",
       cell: (g: GradeRow) =>
-        g.score !== undefined ? (
+        typeof g.score === "number" ? (
           <span className="text-[14px] font-bold font-mono text-primary flex items-center gap-1">
             <Award className="h-4 w-4" />
             {g.score}
@@ -141,14 +160,15 @@ export const GradesPage: React.FC = () => {
   const grades = studentReport ? studentReport.grades : [];
   const average = studentReport?.average ?? 0;
   const totalTugas = grades.length;
-  const gradedTugas = grades.filter((g) => g.score !== undefined).length;
+  const gradedTugas = grades.filter((g) => typeof g.score === "number").length;
   const pendingTugas = totalTugas - gradedTugas;
 
   const filteredGrades = useMemo(() => {
     let result = searchGrades(grades, search);
     result = filterGradesByStatus(result, statusFilter);
+    result = sortGrades(result, sortBy, sortOrder);
     return result;
-  }, [grades, search, statusFilter]);
+  }, [grades, search, statusFilter, sortBy, sortOrder]);
 
   if (loading) {
     return <LoadingState message="Memuat data nilai Anda..." />;
@@ -222,6 +242,9 @@ export const GradesPage: React.FC = () => {
         columns={columns}
         data={filteredGrades}
         keyExtractor={(g) => g.tugasId}
+        sortBy={sortBy}
+        sortOrder={sortOrder}
+        onSortChange={handleSortChange}
         emptyStateTitle="Tidak ada nilai"
         emptyStateDescription={
           search.trim() || statusFilter !== "all"
