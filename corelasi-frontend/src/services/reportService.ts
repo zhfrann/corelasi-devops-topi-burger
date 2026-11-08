@@ -11,6 +11,7 @@ import { userService } from "./userService";
 import { learningService } from "./learningService";
 import { journalService } from "./journalService";
 import type {
+  AttendanceReportFilters,
   StudentAttendanceSummary,
   StudentGradeSummary,
   OperationalReport,
@@ -23,11 +24,16 @@ const delay = (ms = 100) => new Promise((resolve) => setTimeout(resolve, ms));
 export const reportService = {
   async getAttendanceReports(
     kelasId?: string,
+    filters?: AttendanceReportFilters,
   ): Promise<StudentAttendanceSummary[]> {
     if (!IS_TEST) {
+      const params = {
+        ...(kelasId ? { kelasId } : {}),
+        ...(filters?.mapelId ? { mapelId: filters.mapelId } : {}),
+      };
       return apiGet<StudentAttendanceSummary[]>(
         "/reports/attendance/",
-        kelasId ? { kelasId } : undefined,
+        Object.keys(params).length ? params : undefined,
       );
     }
     await delay();
@@ -41,7 +47,10 @@ export const reportService = {
     const reports: StudentAttendanceSummary[] = students.map((student) => {
       const studentClassName = student.kelasName ?? "";
 
-      const records = allAttendance.filter((a) => a.siswaId === student.id);
+      const records = allAttendance.filter(
+        (a) => a.siswaId === student.id &&
+          (!filters?.mapelId || a.mapelId === filters.mapelId),
+      );
 
       let hadir = 0;
       let sakit = 0;
