@@ -70,6 +70,7 @@ INSTALLED_APPS = [
     "learning",
     "journals",
     "reports",
+    "leaves",
 ]
 
 MIDDLEWARE = [
