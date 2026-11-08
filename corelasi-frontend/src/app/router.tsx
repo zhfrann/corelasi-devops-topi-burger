@@ -47,6 +47,9 @@ import {
 
 import { LoginPage } from "@/pages/auth/LoginPage";
 import { Error403Page } from "@/pages/auth/Error403Page";
+import PengajuanIzinPage from "@/pages/siswa/PengajuanIzinPage";
+import RiwayatIzinPage from "@/pages/siswa/RiwayatIzinPage";
+import PersetujuanIzinGuruPage from "@/pages/guru/PersetujuanIzinGuruPage";
 
 export const router = createBrowserRouter([
   {
@@ -208,6 +211,10 @@ export const router = createBrowserRouter([
             ),
           },
           {
+            path: "izin/persetujuan",
+            element: <PersetujuanIzinGuruPage />,
+          },
+          {
             path: "journals",
             element: <GuruJournalsPage />,
           },
@@ -283,6 +290,14 @@ export const router = createBrowserRouter([
           {
             path: "attendance",
             element: <SiswaAttendancePage />,
+          },
+          {
+            path: "izin/pengajuan",
+            element: <PengajuanIzinPage />,
+          },
+          {
+            path: "izin/riwayat",
+            element: <RiwayatIzinPage />,
           },
           {
             path: "learning",
