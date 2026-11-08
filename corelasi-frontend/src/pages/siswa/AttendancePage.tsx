@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { attendanceService } from "@/services/attendanceService";
 import { scheduleService } from "@/services/scheduleService";
@@ -19,6 +19,7 @@ import {
   Input,
   Modal,
   ErrorState,
+  FilterBar,
 } from "@/components/shared";
 import {
   ClipboardCheck,
@@ -28,6 +29,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { filterAttendanceLogs } from "@/utils/attendanceFilters";
 
 export const AttendancePage: React.FC = () => {
   const { user } = useAuth();
@@ -36,6 +38,12 @@ export const AttendancePage: React.FC = () => {
   const [logs, setLogs] = useState<AbsensiSiswa[]>([]);
   const [mySchedules, setMySchedules] = useState<JadwalPembelajaran[]>([]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Filter States (Fitur Baru: Pencarian, Rentang Tanggal, Status Kehadiran)
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
 
   // Correction Form State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -131,7 +139,17 @@ export const AttendancePage: React.FC = () => {
     }
   };
 
-  // Stats Calculations
+  // Filtered Logs menggunakan composite filter
+  const filteredLogs = useMemo(() => {
+    return filterAttendanceLogs(logs, {
+      searchQuery: search,
+      status: statusFilter as StatusKehadiran,
+      startDate: startDate || undefined,
+      endDate: endDate || undefined,
+    });
+  }, [logs, search, statusFilter, startDate, endDate]);
+
+  // Stats Calculations (berdasarkan seluruh data siswa semester ini)
   const total = logs.length;
   const hadir = logs.filter((l) => l.status === "Hadir").length;
   const sakit = logs.filter((l) => l.status === "Sakit").length;
@@ -353,6 +371,67 @@ export const AttendancePage: React.FC = () => {
         />
       </div>
 
+      {/* Filter and Search Bar Terpadu (Pencarian Siswa, Status Kehadiran, & Rentang Tanggal) */}
+      <FilterBar
+        searchPlaceholder="Cari berdasarkan mata pelajaran atau keterangan..."
+        searchValue={search}
+        onSearchChange={setSearch}
+        filterValue={statusFilter}
+        onFilterChange={setStatusFilter}
+        filterPlaceholder="Semua Status"
+        filterLabel="Status"
+        filterOptions={[
+          { value: "Hadir", label: "Hadir" },
+          { value: "Sakit", label: "Sakit" },
+          { value: "Izin", label: "Izin" },
+          { value: "Alpa", label: "Alpa" },
+        ]}
+        searchLabel="Pencarian Presensi"
+        actions={
+          <div className="flex flex-wrap sm:flex-nowrap items-end gap-2.5">
+            <div className="flex flex-col gap-1.5 min-w-[130px]">
+              <span className="text-[10px] font-bold text-bg-ink-muted uppercase tracking-wider pl-0.5">
+                Dari Tanggal
+              </span>
+              <Input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="h-9 py-1 text-[12px]"
+                aria-label="Filter Dari Tanggal"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5 min-w-[130px]">
+              <span className="text-[10px] font-bold text-bg-ink-muted uppercase tracking-wider pl-0.5">
+                Sampai Tanggal
+              </span>
+              <Input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="h-9 py-1 text-[12px]"
+                aria-label="Filter Sampai Tanggal"
+              />
+            </div>
+            {(search || statusFilter || startDate || endDate) && (
+              <Button
+                variant="secondary"
+                size="sm"
+                className="h-9 text-[11px] font-semibold"
+                onClick={() => {
+                  setSearch("");
+                  setStatusFilter("");
+                  setStartDate("");
+                  setEndDate("");
+                }}
+              >
+                Reset
+              </Button>
+            )}
+          </div>
+        }
+      />
+
       {loading ? (
         <LoadingState message="Memuat histori absensi..." />
       ) : error ? (
@@ -361,10 +440,14 @@ export const AttendancePage: React.FC = () => {
         <DataTable
           title="Histori Kehadiran Semester Ini"
           columns={columns}
-          data={logs}
+          data={filteredLogs}
           keyExtractor={(l) => l.id}
           emptyStateTitle="Tidak ada catatan presensi"
-          emptyStateDescription="Anda belum memiliki riwayat presensi tercatat."
+          emptyStateDescription={
+            search || statusFilter || startDate || endDate
+              ? "Tidak ada rekaman presensi yang cocok dengan kriteria filter Anda."
+              : "Anda belum memiliki riwayat presensi tercatat."
+          }
         />
       )}
     </div>
